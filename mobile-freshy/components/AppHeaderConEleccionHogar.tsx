@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { View, Image, StyleSheet, TouchableOpacity, Modal, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export type HogarOption = { id: string; name: string };
-
 type Props = {
   hogares: HogarOption[];
   selectedId: string;
@@ -17,7 +16,11 @@ export default function AppHeaderConEleccionHogar({ hogares, selectedId, onSelec
   return (
     <View style={styles.header}>
       <TouchableOpacity style={styles.titleRow} onPress={() => setOpen(true)}>
-        <Text style={styles.headerTitle}>freshy</Text>
+        <Image
+          source={require('../assets/images/logo_blanco_sin_fondo_grande_arbol_recadre.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <View style={styles.hogarPill}>
           <Text style={styles.hogarText}>{selectedName}</Text>
           <Ionicons name="chevron-down" size={13} color="#fff" />
@@ -50,20 +53,17 @@ export default function AppHeaderConEleccionHogar({ hogares, selectedId, onSelec
 const styles = StyleSheet.create({
   header: {
     backgroundColor: '#A8CFEE',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 6,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '800',
-    fontStyle: 'italic',
+  logo: {
+    height: 70,
+    width: 150,
   },
   hogarPill: {
     flexDirection: 'row',
@@ -73,11 +73,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 4,
+
   },
   hogarText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+    
   },
   backdrop: {
     flex: 1,
@@ -85,6 +87,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'center',
     paddingTop: 110,
+    
   },
   menu: {
     backgroundColor: '#fff',
