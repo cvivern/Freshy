@@ -4,7 +4,13 @@
       "Bash(source .venv/Scripts/activate)",
       "Bash(python:*)",
       "Bash(source venv/Scripts/activate)",
-      "Bash(source venv/bin/activate)"
+      "Bash(source venv/bin/activate)",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "mcp__claude_ai_Vercel__get_runtime_logs",
+      "mcp__claude_ai_Vercel__get_project",
+      "mcp__claude_ai_Vercel__get_deployment_build_logs",
+      "mcp__claude_ai_Vercel__deploy_to_vercel",
+      "Bash(vercel deploy:*)"
     ]
   }
 }

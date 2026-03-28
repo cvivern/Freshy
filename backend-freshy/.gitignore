@@ -16,3 +16,5 @@ build/
 .idea/
 .vscode/
 *.iml
+.vercel
+.env*.local

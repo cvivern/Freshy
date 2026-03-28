@@ -7,7 +7,11 @@
       "Bash(npm --version)",
       "Bash(npx tsc:*)",
       "Bash(npx expo:*)",
+<<<<<<< HEAD
       "Bash(cat -n \"c:\\\\Users\\\\cachi\\\\OneDrive\\\\Documents\\\\Freshy\\\\mobile-freshy\\\\app\\\\\\(tabs\\)\\\\stock.tsx\")"
+=======
+      "Bash(cat -n \"c:/Users/cachi/OneDrive/Documents/Freshy/mobile-freshy/app/\\(tabs\\)/add.tsx\")"
+>>>>>>> 15739df467e882f02e8a87c864204587c1b61660
     ]
   }
 }

@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 // ------- Config -------
 // Android emulator → 10.0.2.2 | iOS simulator → localhost | dispositivo físico → IP de tu PC
 export const API_BASE = 'https://backend-freshy.vercel.app';
+=======
+const API_BASE_URL = 'https://backend-freshy.vercel.app/';
+>>>>>>> 15739df467e882f02e8a87c864204587c1b61660
 
 // ID del storage area y usuario (Heladera Principal)
 export const DEFAULT_STORAGE_AREA_ID = '00000000-0000-0000-0001-000000000001';
