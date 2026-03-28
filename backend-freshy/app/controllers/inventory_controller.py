@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 
 from app.core.supabase import get_supabase_client
-from app.models.inventory import InventoryItemResponse
+from app.models.inventory import AddDetectedItemsRequest, InventoryItemResponse
+from app.repositories.catalog_item_repository import CatalogItemRepository
 from app.repositories.inventory_repository import InventoryRepository
 from app.services.inventory_service import InventoryService
 
@@ -17,7 +18,8 @@ router = APIRouter(prefix="/inventory", tags=["Inventory"])
 def get_inventory_service() -> InventoryService:
     client = get_supabase_client()
     repo = InventoryRepository(client)
-    return InventoryService(repo)
+    catalog_repo = CatalogItemRepository(client)
+    return InventoryService(repo, catalog_repo)
 
 
 # ---------------------------------------------------------------------------
@@ -46,3 +48,15 @@ def list_inventory(
         marca=marca,
         estado=estado,
     )
+
+
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    summary="Add detected items to inventory",
+)
+def add_detected_items(
+    body: AddDetectedItemsRequest,
+    service: InventoryService = Depends(get_inventory_service),
+):
+    return service.add_from_detection(body)

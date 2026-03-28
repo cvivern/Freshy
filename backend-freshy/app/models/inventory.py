@@ -4,6 +4,17 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class DetectedItemInput(BaseModel):
+    name: str
+    quantity: int = 1
+    unit: str = "unidad"
+
+
+class AddDetectedItemsRequest(BaseModel):
+    storage_area_id: UUID
+    items: list[DetectedItemInput]
+
+
 class InventoryItemResponse(BaseModel):
     id: UUID
     nombre: str

@@ -1,14 +1,17 @@
+from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from app.models.inventory import InventoryItemResponse
+from app.models.inventory import AddDetectedItemsRequest, InventoryItemResponse
+from app.repositories.catalog_item_repository import CatalogItemRepository
 from app.repositories.inventory_repository import InventoryRepository
 
 
 class InventoryService:
-    def __init__(self, repo: InventoryRepository) -> None:
+    def __init__(self, repo: InventoryRepository, catalog_repo: CatalogItemRepository) -> None:
         self._repo = repo
+        self._catalog_repo = catalog_repo
 
     def get_inventory(
         self,
@@ -42,6 +45,35 @@ class InventoryService:
             items = [i for i in items if i.marca and marca.lower() in i.marca.lower()]
 
         return items
+
+    def add_from_detection(self, request: AddDetectedItemsRequest) -> list[dict]:
+        results = []
+        for item_data in request.items:
+            # Find or create catalog item by name
+            catalog_item = self._catalog_repo.find_by_name(item_data.name)
+            if not catalog_item:
+                catalog_item = self._catalog_repo.create({
+                    "name": item_data.name,
+                    "category": "Frutas y Verduras",
+                    "barcode": None,
+                    "duracion_estimada_dias": 7,
+                })
+
+            shelf_life = catalog_item.get("duracion_estimada_dias") or 7
+            expiry_date = date.today() + timedelta(days=shelf_life)
+
+            row = self._repo.create({
+                "storage_area_id": str(request.storage_area_id),
+                "catalog_item_id": catalog_item["id"],
+                "quantity": item_data.quantity,
+                "unit": item_data.unit,
+                "entry_date": date.today().isoformat(),
+                "expiry_date": expiry_date.isoformat(),
+                "freshness_state": "fresco",
+            })
+            results.append({"id": row["id"], "name": catalog_item["name"]})
+
+        return results
 
     # ------------------------------------------------------------------
     # Private helpers

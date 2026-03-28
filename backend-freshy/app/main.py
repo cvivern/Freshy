@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.controllers.detection_controller import router as detection_router
 from app.controllers.fruit_controller import router as fruit_router
 from app.controllers.inventory_controller import router as inventory_router
 from app.controllers.product_controller import router as product_router
@@ -33,6 +34,7 @@ API_PREFIX = "/api/v1"
 app.include_router(product_router, prefix=API_PREFIX)
 app.include_router(fruit_router, prefix=API_PREFIX)
 app.include_router(inventory_router, prefix=API_PREFIX)
+app.include_router(detection_router, prefix=API_PREFIX)
 
 
 # ---------------------------------------------------------------------------

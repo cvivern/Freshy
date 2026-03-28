@@ -36,6 +36,10 @@ class InventoryRepository:
         )
         return response.data
 
+    def create(self, payload: dict) -> dict:
+        response = self._db.table(INVENTORY_TABLE).insert(payload).execute()
+        return response.data[0]
+
     def get_storage_area_owner(self, storage_area_id: UUID) -> str | None:
         """Returns the owner_id (profile_id) that owns the storage_area, or None.
 
