@@ -37,7 +37,12 @@ class DetectionService:
         response.raise_for_status()
         data = response.json()
 
-        predictions = data.get("predictions", [])
+        VALID_CLASSES = {"apple", "kiwi", "orange", "pear", "strawberry", "tomato"}
+
+        predictions = [
+            p for p in data.get("predictions", [])
+            if p.get("class", "").lower() in VALID_CLASSES
+        ]
         detected_items = list({p["class"] for p in predictions})
 
         return {
