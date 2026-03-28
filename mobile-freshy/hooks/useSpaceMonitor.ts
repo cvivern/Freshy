@@ -10,13 +10,13 @@
  *   // Render <MonitorCamera /> anywhere (it's invisible, 1x1 px)
  */
 
-import { useRef, useEffect, useCallback, useState } from 'react';
-import { Platform } from 'react-native';
+import { useRef, useEffect, useCallback } from 'react';
 import * as Notifications from 'expo-notifications';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React from 'react';
 import { View } from 'react-native';
 import { API_BASE } from '@/services/api';
+import { useMonitor } from '@/contexts/MonitorContext';
 
 const CAPTURE_INTERVAL_MS = 3000;   // take photo every 3 seconds
 const MOTION_THRESHOLD    = 0.04;   // 4% pixel difference = motion
@@ -70,6 +70,7 @@ export function useSpaceMonitor({
 }: UseSpaceMonitorOptions) {
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const { showMonitorToast } = useMonitor();
 
   const lastB64Ref      = useRef<string | null>(null);
   const beforeB64Ref    = useRef<string | null>(null);
@@ -135,42 +136,36 @@ export function useSpaceMonitor({
             });
             const event: MonitorEvent = await res.json();
 
-            if (event.accion === 'salida' && event.confianza > 0.55) {
+            if ((event.accion === 'salida' || event.accion === 'entrada') && event.confianza > 0.55) {
               onEvent?.(event);
 
-              const emoji  = event.producto_emoji ?? '📦';
-              const nombre = event.producto_nombre ?? 'producto';
-              // Backend already decremented inventory and returns cantidad_restante
+              const emoji     = event.producto_emoji ?? '📦';
+              const nombre    = event.producto_nombre ?? 'producto';
               const remaining = (event as any).cantidad_restante ?? null;
 
-              if (remaining !== null && remaining <= 0) {
-                await sendNotification(
-                  `${emoji} Ya no tenés ${nombre}`,
-                  '¿Lo agregamos a la lista de compras?'
-                );
-              } else if (remaining !== null) {
-                const unit = remaining === 1 ? 'unidad' : 'unidades';
-                const verb = remaining === 1 ? 'queda' : 'quedan';
-                await sendNotification(
-                  `${emoji} Retiraste ${nombre}`,
-                  `Te ${verb} ${remaining} ${unit}`
-                );
+              // ── Popup en pantalla (inmediato) ──
+              showMonitorToast({
+                accion:             event.accion,
+                producto_nombre:    nombre,
+                producto_emoji:     emoji,
+                cantidad_restante:  remaining,
+              });
+
+              // ── Notificación push (también, para cuando la app está en background) ──
+              if (event.accion === 'salida') {
+                if (remaining !== null && remaining <= 0) {
+                  await sendNotification(`${emoji} Ya no tenés ${nombre}`, '¿Lo agregamos a la lista de compras?');
+                } else if (remaining !== null) {
+                  const unit = remaining === 1 ? 'unidad' : 'unidades';
+                  const verb = remaining === 1 ? 'queda' : 'quedan';
+                  await sendNotification(`${emoji} Retiraste ${nombre}`, `Te ${verb} ${remaining} ${unit}`);
+                } else {
+                  await sendNotification(`${emoji} Retiraste ${nombre}`, event.descripcion ?? '');
+                }
               } else {
-                await sendNotification(
-                  `${emoji} Retiraste ${nombre}`,
-                  event.descripcion ?? ''
-                );
-              }
-            } else if (event.accion === 'entrada' && event.confianza > 0.55) {
-              onEvent?.(event);
-              const emoji  = event.producto_emoji ?? '📦';
-              const nombre = event.producto_nombre ?? 'producto';
-              const remaining = (event as any).cantidad_restante ?? null;
-              if (remaining !== null) {
-                await sendNotification(
-                  `${emoji} Agregaste ${nombre}`,
-                  `Ahora tenés ${remaining} ${remaining === 1 ? 'unidad' : 'unidades'}`
-                );
+                if (remaining !== null) {
+                  await sendNotification(`${emoji} Agregaste ${nombre}`, `Ahora tenés ${remaining} ${remaining === 1 ? 'unidad' : 'unidades'}`);
+                }
               }
             }
           } catch {
