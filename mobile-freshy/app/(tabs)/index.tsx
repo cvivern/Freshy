@@ -182,7 +182,7 @@ export default function HomeScreen() {
 
               {/* Progress bar */}
               <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${progress * 100}%` as any }]} />
+                <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: getBorderColor(item.daysLeft) }]} />
               </View>
 
               {/* Expiry row */}
