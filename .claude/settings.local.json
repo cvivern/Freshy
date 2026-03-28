@@ -3,7 +3,8 @@
     "allow": [
       "WebFetch(domain:universe.roboflow.com)",
       "WebFetch(domain:docs.roboflow.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npm --version)"
     ]
   }
 }
