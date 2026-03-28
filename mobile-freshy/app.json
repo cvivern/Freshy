@@ -4,22 +4,22 @@
     "slug": "mobile-freshy",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/logo_blanco_sin_fondo_grande_arbol.png",
     "scheme": "mobilefreshy",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/logo_blanco_sin_fondo_grande_arbol.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#A8CFEE"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/images/logo_blanco_sin_fondo_grande_arbol.png",
+        "backgroundColor": "#A8CFEE"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -30,7 +30,15 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-camera",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo_blanco_sin_fondo_grande_arbol.png",
+          "color": "#A8CFEE"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
