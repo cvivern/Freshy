@@ -38,6 +38,17 @@ export type AddInventoryPayload = {
 
 // ------- Label mapping (Roboflow fruit-b2sy0) -------
 const LABEL_MAP: Record<string, string> = {
+  // Plain labels (returned by /api/v1/detection/identify)
+  strawberry:        'Frutilla',
+  apple:             'Manzana',
+  banana:            'Banana',
+  orange:            'Naranja',
+  mango:             'Mango',
+  grapes:            'Uvas',
+  watermelon:        'Sandía',
+  pineapple:         'Ananá',
+  lemon:             'Limón',
+  // _fresh / _rotten labels (legacy /detection/fruits endpoint)
   apple_fresh:       'Manzana',
   apple_rotten:      'Manzana (en mal estado)',
   banana_fresh:      'Banana',
@@ -56,6 +67,10 @@ const LABEL_MAP: Record<string, string> = {
 };
 
 // ------- Helpers -------
+export function getFruitName(label: string): string {
+  return LABEL_MAP[label] ?? label.replace(/_/g, ' ');
+}
+
 export function parseFruitDetections(detections: Detection[]): ProductInfo {
   if (!detections.length) return { category: 'Frutas y verduras', brand: '—', name: 'No reconocido' };
   const best = detections.reduce((a, b) => (a.confidence > b.confidence ? a : b));
@@ -109,6 +124,15 @@ export async function fetchWithTimeout(
 }
 
 // ------- Detection endpoints -------
+export async function identifyFruits(uri: string): Promise<Detection[]> {
+  const formData = new FormData();
+  formData.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  const response = await fetchWithTimeout(`${API_BASE}/api/v1/detection/identify`, { method: 'POST', body: formData });
+  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
+  const data = await response.json();
+  return (data.detections ?? []) as Detection[];
+}
+
 export async function detectFrutaVerdura(uri: string): Promise<ProductInfo> {
   const formData = new FormData();
   formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
@@ -146,9 +170,11 @@ export async function scanBarcodeImage(uri: string): Promise<BarcodeInfo> {
 // ------- Inventory endpoints -------
 export async function fetchInventoryItems(
   userId: string = DEFAULT_USER_ID,
-  storageAreaId: string = DEFAULT_STORAGE_AREA_ID
+  storageAreaId?: string
 ): Promise<InventoryItem[]> {
-  const url = `${API_BASE}/api/v1/inventory/?user_id=${encodeURIComponent(userId)}&storage_area_id=${encodeURIComponent(storageAreaId)}`;
+  const params = new URLSearchParams({ user_id: userId });
+  if (storageAreaId) params.append('storage_area_id', storageAreaId);
+  const url = `${API_BASE}/api/v1/inventory/?${params.toString()}`;
   const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
   if (!response.ok) return [];
   return response.json();
@@ -160,7 +186,7 @@ export type InventoryItemResponse = InventoryItem;
 /** @deprecated Usá fetchInventoryItems. Mantenido para compatibilidad con stock.tsx */
 export async function fetchInventory(
   userId: string,
-  storageAreaId: string
+  storageAreaId?: string
 ): Promise<InventoryItem[]> {
   return fetchInventoryItems(userId, storageAreaId);
 }
@@ -243,6 +269,20 @@ export async function deleteStorageArea(storageAreaId: string): Promise<void> {
   }
 }
 
+// Maps Roboflow class names to readable Spanish labels
+// Valid classes from this model: apple, kiwi, orange, pear, strawberry, tomato
+export function formatItemName(cls: string): string {
+  // Valid classes from this model: apple, kiwi, orange, pear, strawberry, tomato
+  const map: Record<string, string> = {
+    apple: 'Manzana',
+    kiwi: 'Kiwi',
+    orange: 'Naranja',
+    pear: 'Pera',
+    strawberry: 'Frutilla',
+    tomato: 'Tomate',
+  };
+  return map[cls.toLowerCase()] ?? cls.replace(/_/g, ' ');
+}
 export async function addToInventory(payload: AddInventoryPayload): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/inventory/`,

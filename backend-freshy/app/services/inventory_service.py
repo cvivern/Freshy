@@ -140,6 +140,6 @@ class InventoryService:
             foto=row.get("foto_url") or catalog.get("image_url"),
             categoria=catalog.get("category"),
             fecha_vencimiento=row.get("expiry_date"),
-            estado=row.get("freshness_state", "fresco"),
+            estado=row.get("freshness_state") or "fresco",
             last_used=last_used,
         )

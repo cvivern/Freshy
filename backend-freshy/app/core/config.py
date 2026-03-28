@@ -8,11 +8,6 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_service_role_key: str
 
-    # Roboflow
-    roboflow_api_key: str
-    roboflow_model_id: str = "fruit-b2sy0-z1hgv/1"
-    roboflow_api_url: str = "https://detect.roboflow.com"
-
     # App
     app_name: str = "Freshy API"
     app_version: str = "0.1.0"

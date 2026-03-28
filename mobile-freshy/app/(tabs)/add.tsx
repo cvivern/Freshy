@@ -27,15 +27,16 @@ import {
   createStorageArea,
   deleteHousehold,
   deleteStorageArea,
-  detectFrutaVerdura,
   detectOtroProducto,
   fetchHouseholds,
   fetchInventoryItems,
   fetchStorageAreas,
+  getFruitName,
+  identifyFruits,
   scanBarcodeImage,
   toISODate,
 } from '@/services/api';
-import type { BarcodeInfo, Household, InventoryItem, ProductInfo, StorageArea } from '@/services/api';
+import type { BarcodeInfo, Detection, Household, InventoryItem, ProductInfo, StorageArea } from '@/services/api';
 
 // Fallback data matching seed.sql (used when backend endpoints aren't deployed yet)
 const FALLBACK_HOUSEHOLDS: Household[] = [
@@ -62,6 +63,8 @@ type Phase =
   | 'camera_product'     // cámara in-app para foto de marca
   | 'detecting_product'  // procesando primera foto
   | 'product_popup'      // popup sobre la foto: categoría + marca + nombre
+  | 'fruit_confirm'      // confirmar detección una a una: Sí / No
+  | 'fruit_expiry'       // pedir fecha de vencimiento para fruta confirmada
   | 'camera_barcode'     // cámara in-app para código/fecha
   | 'detecting_barcode'  // procesando segunda foto (vision AI lee barcode+fecha)
   | 'barcode_popup';     // popup con datos leídos (editables) → guardar
@@ -97,6 +100,10 @@ export default function AddScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [productInfo, setProductInfo] = useState<ProductInfo>({ category: '', brand: '', name: '' });
   const [barcodeInfo, setBarcodeInfo] = useState<BarcodeInfo>({ barcode: '', expiryDate: '' });
+  const [detections, setDetections] = useState<Detection[]>([]);
+  const [detectionIndex, setDetectionIndex] = useState(0);
+  const [fruitExpiry, setFruitExpiry] = useState('');
+  const [selectedDays, setSelectedDays] = useState<number | null>(null);
   const [restock, setRestock] = useState<RestockState | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
@@ -247,10 +254,21 @@ export default function AddScreen() {
     setPhotoUri(photo.uri);
     setPhase('detecting_product');
     try {
-      const info = category === 'fruta_verdura'
-        ? await detectFrutaVerdura(photo.uri)
-        : await detectOtroProducto(photo.uri);
-      setProductInfo(info);
+      if (category === 'fruta_verdura') {
+        const dets = await identifyFruits(photo.uri);
+        setDetections(dets);
+        setDetectionIndex(0);
+        if (dets.length === 0) {
+          Alert.alert('Sin resultados', 'No se detectó ninguna fruta o verdura.');
+          setPhase('select_type');
+        } else {
+          setPhase('fruit_confirm');
+        }
+      } else {
+        const info = await detectOtroProducto(photo.uri);
+        setProductInfo(info);
+        setPhase('product_popup');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error desconocido';
       Alert.alert(
@@ -260,7 +278,6 @@ export default function AddScreen() {
       );
       return;
     }
-    setPhase('product_popup');
   }
 
   async function captureBarcodePhoto() {
@@ -357,6 +374,63 @@ export default function AddScreen() {
     setPhotoUri(null);
     setProductInfo({ category: '', brand: '', name: '' });
     setBarcodeInfo({ barcode: '', expiryDate: '' });
+    setDetections([]);
+    setDetectionIndex(0);
+    setFruitExpiry('');
+    setSelectedDays(null);
+  }
+
+  function handleFruitConfirmYes() {
+    setFruitExpiry('');
+    setSelectedDays(null);
+    setPhase('fruit_expiry');
+  }
+
+  function handleFruitConfirmNo() {
+    const next = detectionIndex + 1;
+    if (next < detections.length) {
+      setDetectionIndex(next);
+    } else {
+      Alert.alert('Listo', 'No se agregó ningún producto.');
+      reset();
+    }
+  }
+
+  function handleQuickDays(days: number) {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    const iso = date.toISOString().split('T')[0]; // YYYY-MM-DD
+    setFruitExpiry(iso);
+    setSelectedDays(days);
+  }
+
+  async function handleFruitSave() {
+    if (!fruitExpiry.trim()) {
+      Alert.alert('Fecha requerida', 'Ingresá la fecha de vencimiento o usá los botones rápidos.');
+      return;
+    }
+    const det = detections[detectionIndex];
+    const name = getFruitName(det.label);
+    try {
+      await addToInventory({
+        storage_area_id: DEFAULT_STORAGE_AREA_ID,
+        product_name: name,
+        product_category: 'Frutas y verduras',
+        quantity: 1,
+        expiry_date: toISODate(fruitExpiry),
+      });
+      const next = detectionIndex + 1;
+      if (next < detections.length) {
+        setDetectionIndex(next);
+        setPhase('fruit_confirm');
+      } else {
+        Alert.alert('¡Guardado!', `${name} fue agregado al inventario.`);
+        reset();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      Alert.alert('No se pudo guardar', msg);
+    }
   }
 
   // ================================================================
@@ -412,6 +486,119 @@ export default function AddScreen() {
   }
 
   // ================================================================
+  // FRUIT CONFIRM + FRUIT EXPIRY
+  // ================================================================
+  if (phase === 'fruit_confirm' || phase === 'fruit_expiry') {
+    const det = detections[detectionIndex];
+    const fruitName = det ? getFruitName(det.label) : '';
+    const confidencePct = det ? Math.round(det.confidence * 100) : 0;
+    const total = detections.length;
+
+    return (
+      <View style={styles.fullscreen}>
+        {photoUri && <Image source={{ uri: photoUri }} style={styles.photoBackground} resizeMode="cover" />}
+        <View style={styles.photoDim} />
+
+        {/* ---- Confirm screen ---- */}
+        {phase === 'fruit_confirm' && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.card}>
+              {total > 1 && (
+                <Text style={[styles.aiHint, { textAlign: 'right' }]}>
+                  {detectionIndex + 1} de {total}
+                </Text>
+              )}
+              <View style={styles.successRow}>
+                <Text style={styles.cardTitle}>¿Qué detectamos?</Text>
+              </View>
+              <View style={[styles.detectedBox, { alignItems: 'center', paddingVertical: 20 }]}>
+                <Text style={{ fontSize: 48 }}>🍓</Text>
+                <Text style={[styles.detectedValue, { fontSize: 22, marginTop: 8 }]}>{fruitName}</Text>
+                <Text style={[styles.aiHint, { marginTop: 4 }]}>{confidencePct}% de confianza</Text>
+              </View>
+              <View style={styles.btnRow}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={handleFruitConfirmNo}>
+                  <Ionicons name="close-circle-outline" size={16} color="#888" />
+                  <Text style={styles.secondaryBtnText}>No es esto</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handleFruitConfirmYes}>
+                  <Text style={styles.primaryBtnText}>Sí, agregar</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ---- Expiry screen ---- */}
+        {phase === 'fruit_expiry' && (
+          <KeyboardAvoidingView
+            style={styles.modalOverlay}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.card}>
+              <View style={styles.successRow}>
+                <Ionicons name="checkmark-circle" size={28} color="#27AE60" />
+                <Text style={styles.cardTitle}>{fruitName}</Text>
+              </View>
+
+              {/* Quick-pick buttons */}
+              <View>
+                <Text style={styles.fieldLabel}>¿Cuántos días le quedan?</Text>
+                <View style={styles.expiryBtnRow}>
+                  {([1, 3, 5] as const).map((days) => (
+                    <TouchableOpacity
+                      key={days}
+                      style={[styles.expiryBtn, selectedDays === days && styles.expiryBtnSelected]}
+                      onPress={() => handleQuickDays(days)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.expiryBtnText, selectedDays === days && styles.expiryBtnTextSelected]}>
+                        +{days} {days === 1 ? 'día' : 'días'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {fruitExpiry !== '' && (
+                  <Text style={styles.expirySelected}>
+                    Vence: {fruitExpiry}
+                  </Text>
+                )}
+              </View>
+
+              {/* Manual input */}
+              <View>
+                <Text style={styles.fieldLabel}>
+                  O ingresá la fecha <Text style={styles.optional}>(DD/MM/AAAA)</Text>
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={fruitExpiry}
+                  onChangeText={(v) => { setFruitExpiry(v); setSelectedDays(null); }}
+                  placeholder="DD/MM/AAAA"
+                  placeholderTextColor="#BBB"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.btnRow}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPhase('fruit_confirm')}>
+                  <Ionicons name="arrow-back" size={16} color="#888" />
+                  <Text style={styles.secondaryBtnText}>Volver</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handleFruitSave}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                  <Text style={styles.primaryBtnText}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        )}
+      </View>
+    );
+  }
+
+  // ================================================================
   // PHOTO + OVERLAY (detecting / popup)
   // ================================================================
   if (
@@ -462,20 +649,63 @@ export default function AddScreen() {
                   <Text style={styles.detectedValue}>{productInfo.name || '—'}</Text>
                 </View>
               </View>
-              <Text style={styles.nextHint}>
-                Ahora fotografiá el <Text style={styles.bold}>código de barras</Text> y la{' '}
-                <Text style={styles.bold}>fecha de vencimiento</Text> — la IA los leerá automáticamente.
-              </Text>
-              <View style={styles.btnRow}>
-                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPhase('camera_product')}>
-                  <Ionicons name="camera-outline" size={16} color="#888" />
-                  <Text style={styles.secondaryBtnText}>Retomar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={openBarcodeCamera}>
-                  <Text style={styles.primaryBtnText}>Continuar</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#fff" />
-                </TouchableOpacity>
-              </View>
+              {category === 'fruta_verdura' ? (
+                <>
+                  <View>
+                    <Text style={styles.fieldLabel}>¿Cuándo vence?</Text>
+                    <View style={styles.expiryBtnRow}>
+                      {[1, 3, 5].map((days) => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + days);
+                        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                        const selected = barcodeInfo.expiryDate === iso;
+                        return (
+                          <TouchableOpacity
+                            key={days}
+                            style={[styles.expiryBtn, selected && styles.expiryBtnSelected]}
+                            onPress={() => setBarcodeInfo((p) => ({ ...p, expiryDate: iso }))}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[styles.expiryBtnText, selected && styles.expiryBtnTextSelected]}>
+                              +{days} {days === 1 ? 'día' : 'días'}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    {barcodeInfo.expiryDate ? (
+                      <Text style={styles.expirySelected}>Vence: {barcodeInfo.expiryDate}</Text>
+                    ) : null}
+                  </View>
+                  <View style={styles.btnRow}>
+                    <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPhase('camera_product')}>
+                      <Ionicons name="camera-outline" size={16} color="#888" />
+                      <Text style={styles.secondaryBtnText}>Retomar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handleSave}>
+                      <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                      <Text style={styles.primaryBtnText}>Guardar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.nextHint}>
+                    Ahora fotografiá el <Text style={styles.bold}>código de barras</Text> y la{' '}
+                    <Text style={styles.bold}>fecha de vencimiento</Text> — la IA los leerá automáticamente.
+                  </Text>
+                  <View style={styles.btnRow}>
+                    <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPhase('camera_product')}>
+                      <Ionicons name="camera-outline" size={16} color="#888" />
+                      <Text style={styles.secondaryBtnText}>Retomar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={openBarcodeCamera}>
+                      <Text style={styles.primaryBtnText}>Continuar</Text>
+                      <Ionicons name="arrow-forward" size={18} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </Modal>
@@ -509,14 +739,29 @@ export default function AddScreen() {
                 <Text style={styles.fieldLabel}>
                   Fecha de vencimiento <Text style={styles.optional}>(requerida)</Text>
                 </Text>
-                <TextInput
-                  style={styles.input}
-                  value={barcodeInfo.expiryDate}
-                  onChangeText={(v) => setBarcodeInfo((p) => ({ ...p, expiryDate: v }))}
-                  placeholder="DD/MM/AAAA"
-                  placeholderTextColor="#BBB"
-                  keyboardType="numeric"
-                />
+                <View style={styles.expiryBtnRow}>
+                  {[1, 3, 5].map((days) => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + days);
+                    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    const selected = barcodeInfo.expiryDate === iso;
+                    return (
+                      <TouchableOpacity
+                        key={days}
+                        style={[styles.expiryBtn, selected && styles.expiryBtnSelected]}
+                        onPress={() => setBarcodeInfo((p) => ({ ...p, expiryDate: iso }))}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.expiryBtnText, selected && styles.expiryBtnTextSelected]}>
+                          +{days} {days === 1 ? 'día' : 'días'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {barcodeInfo.expiryDate ? (
+                  <Text style={styles.expirySelected}>Vence: {barcodeInfo.expiryDate}</Text>
+                ) : null}
               </View>
               <View style={styles.btnRow}>
                 <TouchableOpacity style={styles.secondaryBtn} onPress={openBarcodeCamera}>
@@ -1001,6 +1246,25 @@ const styles = StyleSheet.create({
     color: '#222',
     backgroundColor: '#FAFAFA',
   },
+
+  // Expiry quick-select buttons
+  expiryBtnRow: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  expiryBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#DDD',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+  },
+  expiryBtnSelected: {
+    borderColor: '#A8CFEE',
+    backgroundColor: '#E8F4FD',
+  },
+  expiryBtnText: { fontSize: 14, color: '#888', fontWeight: '600' },
+  expiryBtnTextSelected: { color: '#3A7CA5' },
+  expirySelected: { fontSize: 12, color: '#888', marginTop: 6, textAlign: 'center' },
 
   // Buttons
   btnRow: { flexDirection: 'row', gap: 10 },
