@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     alignItems: 'center',
   },
-  periodChipActive: { backgroundColor: '#D4827A', borderColor: '#D4827A' },
+  periodChipActive: { backgroundColor: '#A8CFEE', borderColor: '#A8CFEE' },
   periodChipText: { fontSize: 13, color: '#555', fontWeight: '500' },
   periodChipTextActive: { color: '#fff', fontWeight: '700' },
 

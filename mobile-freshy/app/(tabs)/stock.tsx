@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   filtersScroll: { marginBottom: 16 },
   filtersContent: { gap: 8, paddingRight: 4 },
   filterChip: { borderWidth: 1.5, borderColor: '#CCC', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#fff' },
-  filterChipActive: { backgroundColor: '#D4827A', borderColor: '#D4827A' },
+  filterChipActive: { backgroundColor: '#A8CFEE', borderColor: '#A8CFEE' },
   filterChipText: { fontSize: 14, color: '#555', fontWeight: '500' },
   filterChipTextActive: { color: '#fff', fontWeight: '700' },
 

@@ -560,15 +560,15 @@ export default function AddScreen() {
 
             {households.map((h, idx) => (
               <View key={h.id} style={[styles.listCard, idx === households.length - 1 && { marginBottom: 0 }]}>
-                <View style={[styles.listCardIcon, { backgroundColor: '#FAE8E6' }]}>
-                  <Ionicons name="home-outline" size={20} color="#D4827A" />
+                <View style={[styles.listCardIcon, { backgroundColor: '#D6EEF8' }]}>
+                  <Ionicons name="home-outline" size={20} color="#A8CFEE" />
                 </View>
                 <Text style={styles.listCardName}>{h.name}</Text>
               </View>
             ))}
 
             <TouchableOpacity style={styles.outlineBtn} onPress={() => setHouseholdModal({ name: '' })} activeOpacity={0.8}>
-              <Ionicons name="add-circle-outline" size={18} color="#D4827A" />
+              <Ionicons name="add-circle-outline" size={18} color="#A8CFEE" />
               <Text style={styles.outlineBtnText}>Agregar hogar</Text>
             </TouchableOpacity>
           </>
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 24,
     height: 24,
-    borderColor: '#D4827A',
+    borderColor: '#A8CFEE',
     borderWidth: 3,
   },
   camCornerTeal: { borderColor: '#4ABCB0' },
@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     borderWidth: 4,
-    borderColor: '#D4827A',
+    borderColor: '#A8CFEE',
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -914,7 +914,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginTop: 4,
   },
-  outlineBtnText: { fontSize: 15, fontWeight: '700', color: '#D4827A' },
+  outlineBtnText: { fontSize: 15, fontWeight: '700', color: '#A8CFEE' },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 8 },
   optional: { fontWeight: '400', color: '#AAA' },
   input: {
@@ -935,7 +935,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#D4827A',
+    backgroundColor: '#A8CFEE',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 20,
@@ -995,7 +995,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#D4827A',
+    backgroundColor: '#A8CFEE',
     alignItems: 'center',
     justifyContent: 'center',
   },
