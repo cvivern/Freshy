@@ -20,6 +20,7 @@ export type InventoryItem = {
   foto: string | null;
   categoria: string | null;
   fecha_vencimiento: string | null; // 'YYYY-MM-DD'
+  estado: 'fresco' | 'por_vencer' | 'vencido';
   last_used: string | null;
 };
 
