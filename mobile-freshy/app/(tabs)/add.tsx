@@ -27,15 +27,16 @@ import {
   createStorageArea,
   deleteHousehold,
   deleteStorageArea,
-  detectFrutaVerdura,
   detectOtroProducto,
   fetchHouseholds,
   fetchInventoryItems,
   fetchStorageAreas,
+  getFruitName,
+  identifyFruits,
   scanBarcodeImage,
   toISODate,
 } from '@/services/api';
-import type { BarcodeInfo, Household, InventoryItem, ProductInfo, StorageArea } from '@/services/api';
+import type { BarcodeInfo, Detection, Household, InventoryItem, ProductInfo, StorageArea } from '@/services/api';
 
 // Fallback data matching seed.sql (used when backend endpoints aren't deployed yet)
 const FALLBACK_HOUSEHOLDS: Household[] = [
@@ -62,6 +63,8 @@ type Phase =
   | 'camera_product'     // cámara in-app para foto de marca
   | 'detecting_product'  // procesando primera foto
   | 'product_popup'      // popup sobre la foto: categoría + marca + nombre
+  | 'fruit_confirm'      // confirmar detección una a una: Sí / No
+  | 'fruit_expiry'       // pedir fecha de vencimiento para fruta confirmada
   | 'camera_barcode'     // cámara in-app para código/fecha
   | 'detecting_barcode'  // procesando segunda foto (vision AI lee barcode+fecha)
   | 'barcode_popup';     // popup con datos leídos (editables) → guardar
@@ -97,6 +100,9 @@ export default function AddScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [productInfo, setProductInfo] = useState<ProductInfo>({ category: '', brand: '', name: '' });
   const [barcodeInfo, setBarcodeInfo] = useState<BarcodeInfo>({ barcode: '', expiryDate: '' });
+  const [detections, setDetections] = useState<Detection[]>([]);
+  const [detectionIndex, setDetectionIndex] = useState(0);
+  const [fruitExpiry, setFruitExpiry] = useState('');
   const [restock, setRestock] = useState<RestockState | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
@@ -247,10 +253,21 @@ export default function AddScreen() {
     setPhotoUri(photo.uri);
     setPhase('detecting_product');
     try {
-      const info = category === 'fruta_verdura'
-        ? await detectFrutaVerdura(photo.uri)
-        : await detectOtroProducto(photo.uri);
-      setProductInfo(info);
+      if (category === 'fruta_verdura') {
+        const dets = await identifyFruits(photo.uri);
+        setDetections(dets);
+        setDetectionIndex(0);
+        if (dets.length === 0) {
+          Alert.alert('Sin resultados', 'No se detectó ninguna fruta o verdura.');
+          setPhase('select_type');
+        } else {
+          setPhase('fruit_confirm');
+        }
+      } else {
+        const info = await detectOtroProducto(photo.uri);
+        setProductInfo(info);
+        setPhase('product_popup');
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error desconocido';
       Alert.alert(
@@ -260,7 +277,6 @@ export default function AddScreen() {
       );
       return;
     }
-    setPhase('product_popup');
   }
 
   async function captureBarcodePhoto() {
@@ -299,6 +315,50 @@ export default function AddScreen() {
       });
       Alert.alert('¡Producto guardado!', `${productInfo.name} fue agregado a tu inventario.`);
       reset();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      Alert.alert('No se pudo guardar', msg);
+    }
+  }
+
+  function handleFruitConfirmYes() {
+    setFruitExpiry('');
+    setPhase('fruit_expiry');
+  }
+
+  function handleFruitConfirmNo() {
+    const next = detectionIndex + 1;
+    if (next < detections.length) {
+      setDetectionIndex(next);
+    } else {
+      Alert.alert('Listo', 'No se agregó ningún producto.');
+      reset();
+    }
+  }
+
+  async function handleFruitSave() {
+    if (!fruitExpiry.trim()) {
+      Alert.alert('Fecha requerida', 'Ingresá la fecha de vencimiento.');
+      return;
+    }
+    const det = detections[detectionIndex];
+    const name = getFruitName(det.label);
+    try {
+      await addToInventory({
+        storage_area_id: DEFAULT_STORAGE_AREA_ID,
+        product_name: name,
+        product_category: 'Frutas y verduras',
+        quantity: 1,
+        expiry_date: toISODate(fruitExpiry),
+      });
+      const next = detectionIndex + 1;
+      if (next < detections.length) {
+        setDetectionIndex(next);
+        setPhase('fruit_confirm');
+      } else {
+        Alert.alert('¡Guardado!', `${name} fue agregado al inventario.`);
+        reset();
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error desconocido';
       Alert.alert('No se pudo guardar', msg);
@@ -357,6 +417,9 @@ export default function AddScreen() {
     setPhotoUri(null);
     setProductInfo({ category: '', brand: '', name: '' });
     setBarcodeInfo({ barcode: '', expiryDate: '' });
+    setDetections([]);
+    setDetectionIndex(0);
+    setFruitExpiry('');
   }
 
   // ================================================================
@@ -407,6 +470,91 @@ export default function AddScreen() {
             <View style={styles.shutterInner} />
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  }
+
+  // ================================================================
+  // FRUIT CONFIRM (one detection at a time)
+  // ================================================================
+  if (phase === 'fruit_confirm' || phase === 'fruit_expiry') {
+    const det = detections[detectionIndex];
+    const fruitName = det ? getFruitName(det.label) : '';
+    const confidencePct = det ? Math.round(det.confidence * 100) : 0;
+    const total = detections.length;
+
+    return (
+      <View style={styles.fullscreen}>
+        {photoUri && <Image source={{ uri: photoUri }} style={styles.photoBackground} resizeMode="cover" />}
+        <View style={styles.photoDim} />
+
+        {phase === 'fruit_confirm' && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.card}>
+              {total > 1 && (
+                <Text style={[styles.aiHint, { textAlign: 'right' }]}>
+                  {detectionIndex + 1} de {total}
+                </Text>
+              )}
+              <View style={styles.successRow}>
+                <Text style={styles.cardTitle}>¿Qué detectamos?</Text>
+              </View>
+              <View style={[styles.detectedBox, { alignItems: 'center', paddingVertical: 20 }]}>
+                <Text style={{ fontSize: 48 }}>🍓</Text>
+                <Text style={[styles.detectedValue, { fontSize: 22, marginTop: 8 }]}>{fruitName}</Text>
+                <Text style={[styles.aiHint, { marginTop: 4 }]}>{confidencePct}% de confianza</Text>
+              </View>
+              <View style={styles.btnRow}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={handleFruitConfirmNo}>
+                  <Ionicons name="close-circle-outline" size={16} color="#888" />
+                  <Text style={styles.secondaryBtnText}>No es esto</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handleFruitConfirmYes}>
+                  <Text style={styles.primaryBtnText}>Sí, agregar</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {phase === 'fruit_expiry' && (
+          <KeyboardAvoidingView
+            style={styles.modalOverlay}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.card}>
+              <View style={styles.successRow}>
+                <Ionicons name="checkmark-circle" size={28} color="#27AE60" />
+                <Text style={styles.cardTitle}>{fruitName}</Text>
+              </View>
+              <View>
+                <Text style={styles.fieldLabel}>
+                  Fecha de vencimiento <Text style={styles.optional}>(requerida)</Text>
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={fruitExpiry}
+                  onChangeText={setFruitExpiry}
+                  placeholder="DD/MM/AAAA"
+                  placeholderTextColor="#BBB"
+                  keyboardType="numeric"
+                  autoFocus
+                />
+              </View>
+              <View style={styles.btnRow}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPhase('fruit_confirm')}>
+                  <Ionicons name="arrow-back" size={16} color="#888" />
+                  <Text style={styles.secondaryBtnText}>Volver</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handleFruitSave}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                  <Text style={styles.primaryBtnText}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        )}
       </View>
     );
   }

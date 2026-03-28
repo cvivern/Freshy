@@ -37,6 +37,17 @@ export type AddInventoryPayload = {
 
 // ------- Label mapping (Roboflow fruit-b2sy0) -------
 const LABEL_MAP: Record<string, string> = {
+  // Plain labels (returned by /api/v1/detection/identify)
+  strawberry:        'Frutilla',
+  apple:             'Manzana',
+  banana:            'Banana',
+  orange:            'Naranja',
+  mango:             'Mango',
+  grapes:            'Uvas',
+  watermelon:        'Sandía',
+  pineapple:         'Ananá',
+  lemon:             'Limón',
+  // _fresh / _rotten labels (legacy /detection/fruits endpoint)
   apple_fresh:       'Manzana',
   apple_rotten:      'Manzana (en mal estado)',
   banana_fresh:      'Banana',
@@ -55,6 +66,10 @@ const LABEL_MAP: Record<string, string> = {
 };
 
 // ------- Helpers -------
+export function getFruitName(label: string): string {
+  return LABEL_MAP[label] ?? label.replace(/_/g, ' ');
+}
+
 export function parseFruitDetections(detections: Detection[]): ProductInfo {
   if (!detections.length) return { category: 'Frutas y verduras', brand: '—', name: 'No reconocido' };
   const best = detections.reduce((a, b) => (a.confidence > b.confidence ? a : b));
@@ -108,6 +123,15 @@ export async function fetchWithTimeout(
 }
 
 // ------- Detection endpoints -------
+export async function identifyFruits(uri: string): Promise<Detection[]> {
+  const formData = new FormData();
+  formData.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  const response = await fetchWithTimeout(`${API_BASE}/api/v1/detection/identify`, { method: 'POST', body: formData });
+  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
+  const data = await response.json();
+  return (data.detections ?? []) as Detection[];
+}
+
 export async function detectFrutaVerdura(uri: string): Promise<ProductInfo> {
   const formData = new FormData();
   formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);

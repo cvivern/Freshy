@@ -1,7 +1,5 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, status
 
-from app.services.detection_service import DetectionService
-
 router = APIRouter(prefix="/detection", tags=["Detection"])
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
@@ -34,13 +32,9 @@ async def identify_image(file: UploadFile = File(...)):
             detail="Image exceeds 10 MB limit.",
         )
 
-    service = DetectionService()
-    try:
-        result = service.detect(image_bytes)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Roboflow inference failed: {exc}",
-        )
-
-    return result
+    # TODO: replace mock with real Roboflow call when integrating
+    return {
+        "detections": [
+            {"label": "strawberry", "confidence": 0.968}
+        ]
+    }
