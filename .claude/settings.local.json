@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:universe.roboflow.com)",
+      "WebFetch(domain:docs.roboflow.com)",
+      "WebSearch",
+      "Bash(npm --version)"
+    ]
+  }
+}
