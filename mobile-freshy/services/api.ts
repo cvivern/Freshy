@@ -188,7 +188,8 @@ export async function fetchHouseholds(userId: string): Promise<Household[]> {
 export async function createHousehold(ownerId: string, name: string): Promise<Household> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/households/`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_id: ownerId, name }) }
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_id: ownerId, name }) },
+    10000
   );
   if (!response.ok) {
     const text = await response.text();
@@ -200,7 +201,8 @@ export async function createHousehold(ownerId: string, name: string): Promise<Ho
 export async function deleteHousehold(householdId: string): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/households/${encodeURIComponent(householdId)}`,
-    { method: 'DELETE' }
+    { method: 'DELETE' },
+    10000
   );
   if (!response.ok && response.status !== 204) {
     const text = await response.text();
@@ -218,7 +220,8 @@ export async function fetchStorageAreas(householdId: string): Promise<StorageAre
 export async function createStorageArea(householdId: string, name: string, climate: StorageArea['climate']): Promise<StorageArea> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/storage-areas/`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ household_id: householdId, name, climate }) }
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ household_id: householdId, name, climate }) },
+    10000
   );
   if (!response.ok) {
     const text = await response.text();
@@ -230,7 +233,8 @@ export async function createStorageArea(householdId: string, name: string, clima
 export async function deleteStorageArea(storageAreaId: string): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/storage-areas/${encodeURIComponent(storageAreaId)}`,
-    { method: 'DELETE' }
+    { method: 'DELETE' },
+    10000
   );
   if (!response.ok && response.status !== 204) {
     const text = await response.text();

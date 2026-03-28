@@ -161,21 +161,20 @@ export default function AddScreen() {
     }
   }
 
-  async function handleDeleteSpace(space: StorageArea) {
+  function handleDeleteSpace(space: StorageArea) {
     Alert.alert('Eliminar espacio', `¿Querés eliminar "${space.name}"? También se eliminarán los productos en ese espacio.`, [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: 'Eliminar', style: 'destructive', onPress: async () => {
-          if (!space.id.startsWith('local-')) {
-            try {
-              await deleteStorageArea(space.id);
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : 'Error desconocido';
-              Alert.alert('No se pudo eliminar', msg);
-              return;
-            }
-          }
+        text: 'Eliminar', style: 'destructive', onPress: () => {
+          // Actualiza UI inmediatamente
           setSpaces((p) => p.filter((s) => s.id !== space.id));
+          // Persiste en DB en background
+          if (!space.id.startsWith('local-')) {
+            deleteStorageArea(space.id).catch((err) => {
+              const msg = err instanceof Error ? err.message : 'Error';
+              Alert.alert('Aviso', `Eliminado localmente pero no en la base de datos: ${msg}`);
+            });
+          }
         }
       },
     ]);
@@ -183,39 +182,40 @@ export default function AddScreen() {
 
   async function handleAddHousehold() {
     if (!newHouseholdName.trim()) return;
-    try {
-      const created = await createHousehold(DEFAULT_USER_ID, newHouseholdName.trim());
-      setHouseholds((p) => [...p, created]);
-      if (!selectedHouseholdId) setSelectedHouseholdId(created.id);
-      setHouseholdModal(false);
-    } catch {
-      const local: Household = { id: `local-${Date.now()}`, name: newHouseholdName.trim(), owner_id: DEFAULT_USER_ID };
-      setHouseholds((p) => [...p, local]);
-      if (!selectedHouseholdId) setSelectedHouseholdId(local.id);
-      setHouseholdModal(false);
-    }
+    const name = newHouseholdName.trim();
+    // Cierra el modal y agrega optimistamente
+    const optimistic: Household = { id: `local-${Date.now()}`, name, owner_id: DEFAULT_USER_ID };
+    setHouseholds((p) => [...p, optimistic]);
+    if (!selectedHouseholdId) setSelectedHouseholdId(optimistic.id);
+    setHouseholdModal(false);
+    // Persiste en DB en background, reemplaza el local con el real si funciona
+    createHousehold(DEFAULT_USER_ID, name)
+      .then((created) => {
+        setHouseholds((p) => p.map((h) => h.id === optimistic.id ? created : h));
+        setSelectedHouseholdId((prev) => prev === optimistic.id ? created.id : prev);
+      })
+      .catch(() => { /* queda local */ });
   }
 
-  async function handleDeleteHousehold(hh: Household) {
+  function handleDeleteHousehold(hh: Household) {
     Alert.alert('Eliminar hogar', `¿Querés eliminar "${hh.name}"? También se eliminarán sus espacios y productos.`, [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: 'Eliminar', style: 'destructive', onPress: async () => {
-          if (!hh.id.startsWith('local-')) {
-            try {
-              await deleteHousehold(hh.id);
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : 'Error desconocido';
-              Alert.alert('No se pudo eliminar', msg);
-              return;
-            }
-          }
+        text: 'Eliminar', style: 'destructive', onPress: () => {
+          // Actualiza UI inmediatamente
           setHouseholds((p) => p.filter((h) => h.id !== hh.id));
+          setSpaces((p) => p.filter((s) => s.household_id !== hh.id));
           if (selectedHouseholdId === hh.id) {
             const remaining = households.filter((h) => h.id !== hh.id);
             setSelectedHouseholdId(remaining.length > 0 ? remaining[0].id : '');
           }
-          setSpaces((p) => p.filter((s) => s.id !== hh.id));
+          // Persiste en DB en background
+          if (!hh.id.startsWith('local-')) {
+            deleteHousehold(hh.id).catch((err) => {
+              const msg = err instanceof Error ? err.message : 'Error';
+              Alert.alert('Aviso', `Eliminado localmente pero no en la base de datos: ${msg}`);
+            });
+          }
         }
       },
     ]);
@@ -593,7 +593,6 @@ export default function AddScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            <Text style={styles.description}>Tus productos en stock — agregá más unidades rápido.</Text>
             {loadingInventory ? (
               <ActivityIndicator size="small" color="#888" style={{ marginTop: 12 }} />
             ) : inventoryItems.length === 0 ? (
