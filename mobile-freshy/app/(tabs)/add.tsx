@@ -18,8 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
 
 // ------- Config -------
-// Android emulator → 10.0.2.2 | iOS simulator → localhost | dispositivo físico → IP de tu PC
-const API_BASE = 'http://10.0.2.2:8000';
+const API_BASE = 'https://backend-freshy.vercel.app';
 
 // ------- Types -------
 type ProductCategory = 'fruta_verdura' | 'otro';
