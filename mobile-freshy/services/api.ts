@@ -46,33 +46,17 @@ export async function addToInventory(payload: AddItemsPayload): Promise<void> {
   }
 }
 
-// Maps Roboflow class names (e.g. "fresh_apple") to readable Spanish labels
+// Maps Roboflow class names to readable Spanish labels
+// Valid classes from this model: apple, kiwi, orange, pear, strawberry, tomato
 export function formatItemName(cls: string): string {
+  // Valid classes from this model: apple, kiwi, orange, pear, strawberry, tomato
   const map: Record<string, string> = {
-    fresh_apple: 'Manzana',
-    rotten_apple: 'Manzana (mala)',
-    fresh_banana: 'Banana',
-    rotten_banana: 'Banana (mala)',
-    fresh_orange: 'Naranja',
-    rotten_orange: 'Naranja (mala)',
-    fresh_tomato: 'Tomate',
-    rotten_tomato: 'Tomate (malo)',
-    fresh_grape: 'Uva',
-    rotten_grape: 'Uva (mala)',
-    fresh_mango: 'Mango',
-    rotten_mango: 'Mango (malo)',
-    fresh_strawberry: 'Frutilla',
-    rotten_strawberry: 'Frutilla (mala)',
-    fresh_lemon: 'Limón',
-    rotten_lemon: 'Limón (malo)',
     apple: 'Manzana',
-    banana: 'Banana',
+    kiwi: 'Kiwi',
     orange: 'Naranja',
-    tomato: 'Tomate',
-    grape: 'Uva',
-    mango: 'Mango',
+    pear: 'Pera',
     strawberry: 'Frutilla',
-    lemon: 'Limón',
+    tomato: 'Tomate',
   };
   return map[cls.toLowerCase()] ?? cls.replace(/_/g, ' ');
 }
