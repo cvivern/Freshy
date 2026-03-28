@@ -136,26 +136,12 @@ export function useSpaceMonitor({
             const event: MonitorEvent = await res.json();
 
             if (event.accion === 'salida' && event.confianza > 0.55) {
-              // Fetch updated inventory count for this product
               onEvent?.(event);
 
-              // Fire notification
-              const emoji = event.producto_emoji ?? '📦';
+              const emoji  = event.producto_emoji ?? '📦';
               const nombre = event.producto_nombre ?? 'producto';
-
-              // Try to get remaining count from Supabase via backend
-              let remaining: number | null = null;
-              try {
-                const invRes = await fetch(
-                  `${API_BASE}/api/v1/inventory/?storage_area_id=${storageAreaId}`
-                );
-                const items = await invRes.json();
-                const match = items.find((it: any) =>
-                  it.name?.toLowerCase().includes(nombre.toLowerCase()) ||
-                  nombre.toLowerCase().includes(it.name?.toLowerCase())
-                );
-                if (match) remaining = match.quantity ?? match.cantidad ?? null;
-              } catch {}
+              // Backend already decremented inventory and returns cantidad_restante
+              const remaining = (event as any).cantidad_restante ?? null;
 
               if (remaining !== null && remaining <= 0) {
                 await sendNotification(
@@ -163,9 +149,11 @@ export function useSpaceMonitor({
                   '¿Lo agregamos a la lista de compras?'
                 );
               } else if (remaining !== null) {
+                const unit = remaining === 1 ? 'unidad' : 'unidades';
+                const verb = remaining === 1 ? 'queda' : 'quedan';
                 await sendNotification(
                   `${emoji} Retiraste ${nombre}`,
-                  `Te ${remaining === 1 ? 'queda' : 'quedan'} ${remaining} ${remaining === 1 ? 'unidad' : 'unidades'}`
+                  `Te ${verb} ${remaining} ${unit}`
                 );
               } else {
                 await sendNotification(
@@ -175,6 +163,15 @@ export function useSpaceMonitor({
               }
             } else if (event.accion === 'entrada' && event.confianza > 0.55) {
               onEvent?.(event);
+              const emoji  = event.producto_emoji ?? '📦';
+              const nombre = event.producto_nombre ?? 'producto';
+              const remaining = (event as any).cantidad_restante ?? null;
+              if (remaining !== null) {
+                await sendNotification(
+                  `${emoji} Agregaste ${nombre}`,
+                  `Ahora tenés ${remaining} ${remaining === 1 ? 'unidad' : 'unidades'}`
+                );
+              }
             }
           } catch {
             // Silently ignore network errors
