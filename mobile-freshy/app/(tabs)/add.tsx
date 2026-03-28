@@ -165,12 +165,12 @@ export default function AddScreen() {
     Alert.alert('Eliminar espacio', `¿Querés eliminar "${space.name}"?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: 'Eliminar', style: 'destructive', onPress: async () => {
-          try {
-            await deleteStorageArea(space.id);
-            setSpaces((p) => p.filter((s) => s.id !== space.id));
-          } catch (err) {
-            Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar');
+        text: 'Eliminar', style: 'destructive', onPress: () => {
+          // Remove from UI immediately
+          setSpaces((p) => p.filter((s) => s.id !== space.id));
+          // Persist to DB in background (skip for local-only items)
+          if (!space.id.startsWith('local-')) {
+            deleteStorageArea(space.id).catch(() => {});
           }
         }
       },
@@ -196,16 +196,16 @@ export default function AddScreen() {
     Alert.alert('Eliminar hogar', `¿Querés eliminar "${hh.name}"?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: 'Eliminar', style: 'destructive', onPress: async () => {
-          try {
-            await deleteHousehold(hh.id);
-            setHouseholds((p) => p.filter((h) => h.id !== hh.id));
-            if (selectedHouseholdId === hh.id) {
-              const remaining = households.filter((h) => h.id !== hh.id);
-              setSelectedHouseholdId(remaining.length > 0 ? remaining[0].id : '');
-            }
-          } catch (err) {
-            Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar');
+        text: 'Eliminar', style: 'destructive', onPress: () => {
+          // Remove from UI immediately
+          setHouseholds((p) => p.filter((h) => h.id !== hh.id));
+          if (selectedHouseholdId === hh.id) {
+            const remaining = households.filter((h) => h.id !== hh.id);
+            setSelectedHouseholdId(remaining.length > 0 ? remaining[0].id : '');
+          }
+          // Persist to DB in background (skip for local-only items)
+          if (!hh.id.startsWith('local-')) {
+            deleteHousehold(hh.id).catch(() => {});
           }
         }
       },
