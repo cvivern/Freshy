@@ -348,9 +348,9 @@ function CameraModal({
           <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Ej: Cámara heladera" placeholderTextColor="#BBB" />
           <Text style={styles.inputLabel}>Espacio</Text>
           <View style={styles.areaList}>
-            {storageAreas.map(area => (
+            {storageAreas.map((area, idx) => (
               <TouchableOpacity
-                key={area.id}
+                key={area.id ?? String(idx)}
                 style={[styles.areaChip, selectedArea === area.id && styles.areaChipActive]}
                 onPress={() => setSelectedArea(area.id)}
               >
@@ -512,7 +512,7 @@ export default function ProfileScreen() {
         <Text style={styles.sectionTitle}>Miembros</Text>
         <SectionCard>
           {members.map((m, idx) => (
-            <View key={m.id}>
+            <View key={m.id ?? String(idx)}>
               <View style={styles.memberRow}>
                 <View style={styles.memberAvatar}>
                   <Text style={styles.memberInitials}>{getInitials(m.name)}</Text>
@@ -539,7 +539,7 @@ export default function ProfileScreen() {
             <Text style={{ color: '#BBB', padding: 16, fontSize: 14 }}>No tenés cámaras configuradas.</Text>
           )}
           {cameras.map((cam, idx) => (
-            <View key={cam.id}>
+            <View key={cam.id ?? String(idx)}>
               <View style={styles.cameraRow}>
                 <View style={[styles.cameraIconWrap, { backgroundColor: cam.is_active ? '#E8F4FF' : '#F5F5F5' }]}>
                   <Ionicons name="videocam-outline" size={20} color={cam.is_active ? '#5B9BD5' : '#BBB'} />
