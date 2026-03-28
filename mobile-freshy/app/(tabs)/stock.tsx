@@ -10,7 +10,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AppHeaderConEleccionHogar from '@/components/AppHeaderConEleccionHogar';
 import type { HogarOption } from '@/components/AppHeaderConEleccionHogar';
-import { fetchInventory, fetchHouseholds, fetchStorageAreas, DEFAULT_USER_ID, calcEstado } from '@/services/api';
+import { fetchInventory, fetchHouseholds, fetchStorageAreas, calcEstado } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 import type { InventoryItemResponse } from '@/services/api';
 
 // ------- Types -------
@@ -141,6 +142,7 @@ function ProductCard({ item }: { item: StockItem }) {
 
 // ------- Main Screen -------
 export default function StockScreen() {
+  const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState<'todos' | 'buen_estado' | 'por_vencer' | 'vencidos'>('todos');
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -154,7 +156,7 @@ export default function StockScreen() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchInventory(DEFAULT_USER_ID, areaId);
+      const data = await fetchInventory(user?.user_id ?? '', areaId, user?.access_token);
       setItems(data.map(mapToStockItem));
     } catch (e: any) {
       setError(e.message ?? 'Error al cargar el inventario');
@@ -165,7 +167,7 @@ export default function StockScreen() {
 
   // Load households on mount
   useEffect(() => {
-    fetchHouseholds(DEFAULT_USER_ID).then((hhs) => {
+    fetchHouseholds(user?.user_id ?? '', user?.access_token).then((hhs) => {
       if (hhs.length > 0) {
         const opts: HogarOption[] = hhs.map(h => ({ id: h.id, name: h.name }));
         setHogares(opts);

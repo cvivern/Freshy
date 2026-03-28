@@ -1,3 +1,5 @@
+import random
+
 from fastapi import APIRouter, HTTPException, UploadFile, File, status
 
 from app.services.openai_detection_service import OpenAIDetectionService
@@ -13,6 +15,8 @@ async def _get_image_bytes(image_file: UploadFile) -> bytes:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=f"Tipo de archivo no soportado: '{image_file.content_type}'. Usá JPEG, PNG o WEBP.",
+        )
+    
 @router.post(
     "/identify",
     summary="Detect fruits and vegetables in an image",
@@ -98,3 +102,33 @@ async def detect_fruits(image: UploadFile = File(...)):
             {"label": "strawberry", "confidence": 0.968}
         ]
     }
+
+
+@router.post(
+    "/scan",
+    summary="Scan a packaged product label for name, brand and expiry date",
+    status_code=status.HTTP_200_OK,
+)
+async def scan_packaged_product(file: UploadFile = File(...)):
+    """
+    Upload an image of a packaged product and get back name, brand and expiry date.
+    Fields that could not be read are returned as null.
+    """
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported file type '{file.content_type}'. Use JPEG, PNG or WEBP.",
+        )
+
+    image_bytes = await file.read()
+
+    if len(image_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Image exceeds 10 MB limit.",
+        )
+
+    # TODO: replace mock with real vision AI call
+    result = {"name": "Leche Entera", "brand": "La Serenísima", "expiry_date": "2026-01-01"}
+    result[random.choice(["name", "brand", "expiry_date"])] = None
+    return result

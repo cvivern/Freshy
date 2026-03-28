@@ -17,7 +17,6 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
 import {
-  DEFAULT_STORAGE_AREA_ID,
   fetchProfile,
   fetchInventoryItems,
   updateProfile,
@@ -327,7 +326,7 @@ export default function ProfileScreen() {
   async function handleToggleWeeklySummary(value: boolean) {
     setNotifSemanal(value);
     if (value) {
-      const items = await fetchInventoryItems(user?.user_id ?? '', DEFAULT_STORAGE_AREA_ID);
+      const items = await fetchInventoryItems(user?.user_id ?? '', undefined, user?.access_token);
       await scheduleWeeklySummary(items).catch(() => {});
     } else {
       await cancelWeeklySummary().catch(() => {});

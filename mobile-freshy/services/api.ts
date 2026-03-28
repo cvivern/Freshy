@@ -1,9 +1,13 @@
 // ------- Config -------
 export const API_BASE = 'https://backend-freshy.vercel.app';
 
-// ID del storage area y usuario (Heladera Principal)
-export const DEFAULT_STORAGE_AREA_ID = '00000000-0000-0000-0001-000000000001';
-export const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000101';
+// Default household for seed data
+export const DEFAULT_HOUSEHOLD_ID = '00000000-0000-0000-0000-000000000001';
+
+// ------- Auth helper -------
+function authHeaders(token?: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 // ------- Types -------
 export type Detection = { label: string; confidence: number };
@@ -16,6 +20,12 @@ export type GeminiResult =
   | { type: 'fruit' | 'vegetable'; name: string; freshness: 'fresco' | 'medio' | 'malo'; scanned_at: string }
   | { type: 'barcode_product'; name: string; brand: string | null; expiry_date: string | null; scanned_at: string }
   | { type: 'unknown'; scanned_at: string };
+
+export type PackagedScanResult = {
+  name: string | null;
+  brand: string | null;
+  expiry_date: string | null;
+};
 
 export type InventoryItem = {
   id: string;
@@ -141,6 +151,16 @@ export async function analyzeImage(uri: string): Promise<GeminiResult> {
   if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
   return response.json();
 }
+
+export async function scanPackagedProduct(uri: string): Promise<PackagedScanResult> {
+  const formData = new FormData();
+  formData.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  const response = await fetchWithTimeout(`${API_BASE}/api/v1/detection/scan`, { method: 'POST', body: formData });
+  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
+  return response.json();
+}
+
+
 export async function identifyFruits(uri: string): Promise<Detection[]> {
   const formData = new FormData();
   formData.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
@@ -186,13 +206,14 @@ export async function scanBarcodeImage(uri: string): Promise<BarcodeInfo> {
 
 // ------- Inventory endpoints -------
 export async function fetchInventoryItems(
-  userId: string = DEFAULT_USER_ID,
-  storageAreaId?: string
+  userId: string,
+  storageAreaId?: string,
+  token?: string | null
 ): Promise<InventoryItem[]> {
   const params = new URLSearchParams({ user_id: userId });
   if (storageAreaId) params.append('storage_area_id', storageAreaId);
   const url = `${API_BASE}/api/v1/inventory/?${params.toString()}`;
-  const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+  const response = await fetchWithTimeout(url, { method: 'GET', headers: authHeaders(token) }, 10000);
   if (!response.ok) return [];
   return response.json();
 }
@@ -203,9 +224,10 @@ export type InventoryItemResponse = InventoryItem;
 /** @deprecated Usá fetchInventoryItems. Mantenido para compatibilidad con stock.tsx */
 export async function fetchInventory(
   userId: string,
-  storageAreaId?: string
+  storageAreaId?: string,
+  token?: string | null
 ): Promise<InventoryItem[]> {
-  return fetchInventoryItems(userId, storageAreaId);
+  return fetchInventoryItems(userId, storageAreaId, token);
 }
 
 // ------- Households & Storage Areas -------
@@ -213,26 +235,23 @@ export async function fetchInventory(
 export type Household = { id: string; name: string; owner_id: string };
 export type StorageArea = { id: string; name: string; climate: 'refrigerado' | 'seco' | 'congelado'; household_id: string; emoji?: string };
 
-// Default household for DEFAULT_USER_ID (matches seed data)
-export const DEFAULT_HOUSEHOLD_ID = '00000000-0000-0000-0000-000000000001';
-
 export const CLIMATE_EMOJI: Record<string, string> = {
   refrigerado: '🧊',
   seco: '🗄️',
   congelado: '🥶',
 };
 
-export async function fetchHouseholds(userId: string): Promise<Household[]> {
+export async function fetchHouseholds(userId: string, token?: string | null): Promise<Household[]> {
   const url = `${API_BASE}/api/v1/households/?user_id=${encodeURIComponent(userId)}`;
-  const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+  const response = await fetchWithTimeout(url, { method: 'GET', headers: authHeaders(token) }, 10000);
   if (!response.ok) return [];
   return response.json();
 }
 
-export async function createHousehold(ownerId: string, name: string): Promise<Household> {
+export async function createHousehold(ownerId: string, name: string, token?: string | null): Promise<Household> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/households/`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_id: ownerId, name }) },
+    { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(token) }, body: JSON.stringify({ owner_id: ownerId, name }) },
     10000
   );
   if (!response.ok) {
@@ -242,10 +261,10 @@ export async function createHousehold(ownerId: string, name: string): Promise<Ho
   return response.json();
 }
 
-export async function deleteHousehold(householdId: string): Promise<void> {
+export async function deleteHousehold(householdId: string, token?: string | null): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/households/${encodeURIComponent(householdId)}`,
-    { method: 'DELETE' },
+    { method: 'DELETE', headers: authHeaders(token) },
     10000
   );
   if (!response.ok && response.status !== 204) {
@@ -254,17 +273,17 @@ export async function deleteHousehold(householdId: string): Promise<void> {
   }
 }
 
-export async function fetchStorageAreas(householdId: string): Promise<StorageArea[]> {
+export async function fetchStorageAreas(householdId: string, token?: string | null): Promise<StorageArea[]> {
   const url = `${API_BASE}/api/v1/storage-areas/?household_id=${encodeURIComponent(householdId)}`;
-  const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+  const response = await fetchWithTimeout(url, { method: 'GET', headers: authHeaders(token) }, 10000);
   if (!response.ok) return [];
   return response.json();
 }
 
-export async function createStorageArea(householdId: string, name: string, climate: StorageArea['climate']): Promise<StorageArea> {
+export async function createStorageArea(householdId: string, name: string, climate: StorageArea['climate'], token?: string | null): Promise<StorageArea> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/storage-areas/`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ household_id: householdId, name, climate }) },
+    { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(token) }, body: JSON.stringify({ household_id: householdId, name, climate }) },
     10000
   );
   if (!response.ok) {
@@ -274,10 +293,10 @@ export async function createStorageArea(householdId: string, name: string, clima
   return response.json();
 }
 
-export async function deleteStorageArea(storageAreaId: string): Promise<void> {
+export async function deleteStorageArea(storageAreaId: string, token?: string | null): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/storage-areas/${encodeURIComponent(storageAreaId)}`,
-    { method: 'DELETE' },
+    { method: 'DELETE', headers: authHeaders(token) },
     10000
   );
   if (!response.ok && response.status !== 204) {
@@ -300,12 +319,13 @@ export function formatItemName(cls: string): string {
   };
   return map[cls.toLowerCase()] ?? cls.replace(/_/g, ' ');
 }
-export async function addToInventory(payload: AddInventoryPayload): Promise<void> {
+
+export async function addToInventory(payload: AddInventoryPayload, token?: string | null): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/inventory/`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
       body: JSON.stringify(payload),
     }
   );
@@ -328,10 +348,10 @@ export type UserProfile = {
   members: ProfileMember[];
 };
 
-export async function fetchProfile(userId: string): Promise<UserProfile | null> {
+export async function fetchProfile(userId: string, token?: string | null): Promise<UserProfile | null> {
   const url = `${API_BASE}/api/v1/profiles/${encodeURIComponent(userId)}`;
   try {
-    const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+    const response = await fetchWithTimeout(url, { method: 'GET', headers: authHeaders(token) }, 10000);
     if (!response.ok) return null;
     return response.json();
   } catch {
@@ -339,10 +359,10 @@ export async function fetchProfile(userId: string): Promise<UserProfile | null> 
   }
 }
 
-export async function updateProfile(userId: string, fields: { name?: string; email?: string }): Promise<void> {
+export async function updateProfile(userId: string, fields: { name?: string; email?: string }, token?: string | null): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/profiles/${encodeURIComponent(userId)}`,
-    { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) },
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders(token) }, body: JSON.stringify(fields) },
     10000
   );
   if (!response.ok) {
@@ -351,10 +371,10 @@ export async function updateProfile(userId: string, fields: { name?: string; ema
   }
 }
 
-export async function addHouseholdMember(userId: string, email: string): Promise<ProfileMember> {
+export async function addHouseholdMember(userId: string, email: string, token?: string | null): Promise<ProfileMember> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/profiles/${encodeURIComponent(userId)}/members`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) },
+    { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(token) }, body: JSON.stringify({ email }) },
     10000
   );
   if (!response.ok) {

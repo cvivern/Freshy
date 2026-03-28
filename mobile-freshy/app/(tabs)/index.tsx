@@ -13,12 +13,12 @@ import { Ionicons } from '@expo/vector-icons';
 import AppHeaderConEleccionHogar from '@/components/AppHeaderConEleccionHogar';
 import type { HogarOption } from '@/components/AppHeaderConEleccionHogar';
 import {
-  DEFAULT_USER_ID,
   calcEstado,
   fetchHouseholds,
   fetchInventoryItems,
   fetchStorageAreas,
 } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 import type { InventoryItem } from '@/services/api';
 import { scheduleExpiryNotifications } from '@/services/notifications';
 
@@ -154,6 +154,7 @@ function Dropdown({ options, selected, onSelect }: DropdownProps) {
 
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 export default function HomeScreen() {
+  const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterState>('todos');
   const [activeSort, setActiveSort] = useState<SortOption>('vence_primero');
@@ -167,7 +168,7 @@ export default function HomeScreen() {
 
   // Cargar hogares al montar
   useEffect(() => {
-    fetchHouseholds(DEFAULT_USER_ID).then((hhs) => {
+    fetchHouseholds(user?.user_id ?? '', user?.access_token).then((hhs) => {
       if (hhs.length > 0) {
         const opts: HogarOption[] = hhs.map(h => ({ id: h.id, name: h.name }));
         setHogares(opts);
@@ -199,7 +200,7 @@ export default function HomeScreen() {
     if (!selectedStorageAreaId) return;
     setLoading(true);
     setError(null);
-    fetchInventoryItems(DEFAULT_USER_ID, selectedStorageAreaId)
+    fetchInventoryItems(user?.user_id ?? '', selectedStorageAreaId, user?.access_token)
       .then((data) => {
         setItems(data);
         scheduleExpiryNotifications(data).catch(() => {});
@@ -299,7 +300,7 @@ export default function HomeScreen() {
                 if (!selectedStorageAreaId) return;
                 setLoading(true);
                 setError(null);
-                fetchInventoryItems(DEFAULT_USER_ID, selectedStorageAreaId)
+                fetchInventoryItems(user?.user_id ?? '', selectedStorageAreaId, user?.access_token)
                   .then(setItems)
                   .catch((e) => setError(e.message ?? 'Error al cargar'))
                   .finally(() => setLoading(false));

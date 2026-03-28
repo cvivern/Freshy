@@ -11,9 +11,6 @@ import AppHeaderConEleccionHogar from '@/components/AppHeaderConEleccionHogar';
 import type { HogarOption } from '@/components/AppHeaderConEleccionHogar';
 import {
   CLIMATE_EMOJI,
-  DEFAULT_HOUSEHOLD_ID,
-  DEFAULT_STORAGE_AREA_ID,
-  DEFAULT_USER_ID,
   fetchHouseholds,
   fetchInventoryItems,
   fetchStorageAreas,
@@ -21,6 +18,7 @@ import {
   type InventoryItem,
   type StorageArea,
 } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ------- Types -------
 type StatsData = {
@@ -220,6 +218,7 @@ function CategoriasRiesgo({ items }: { items: StatsData['categorias_riesgo'] }) 
 
 // ------- Main Screen -------
 export default function StatsScreen() {
+  const { user } = useAuth();
   const [data, setData] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -236,13 +235,13 @@ export default function StatsScreen() {
       let items: InventoryItem[];
       if (areaId === null) {
         if (areas.length > 0) {
-          const results = await Promise.all(areas.map((a) => fetchInventoryItems(DEFAULT_USER_ID, a.id)));
+          const results = await Promise.all(areas.map((a) => fetchInventoryItems(user?.user_id ?? '', a.id, user?.access_token)));
           items = results.flat();
         } else {
-          items = await fetchInventoryItems(DEFAULT_USER_ID, DEFAULT_STORAGE_AREA_ID);
+          items = await fetchInventoryItems(user?.user_id ?? '', undefined, user?.access_token);
         }
       } else {
-        items = await fetchInventoryItems(DEFAULT_USER_ID, areaId);
+        items = await fetchInventoryItems(user?.user_id ?? '', areaId, user?.access_token);
       }
       setData(computeStats(items));
     } catch (e: any) {
@@ -254,8 +253,8 @@ export default function StatsScreen() {
 
   async function loadAreas(householdId?: string) {
     try {
-      const hhs = await fetchHouseholds(DEFAULT_USER_ID);
-      const hhId = householdId ?? hhs[0]?.id ?? DEFAULT_HOUSEHOLD_ID;
+      const hhs = await fetchHouseholds(user?.user_id ?? '', user?.access_token);
+      const hhId = householdId ?? hhs[0]?.id ?? '';
       setHogares(hhs.map(h => ({ id: h.id, name: h.name })));
       setSelectedHouseholdId(hhId);
       const areas = await fetchStorageAreas(hhId);

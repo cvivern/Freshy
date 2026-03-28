@@ -19,6 +19,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: str
+
+
 class ChangePasswordRequest(BaseModel):
     user_id: str
     email: str
@@ -35,23 +41,63 @@ def login(body: LoginRequest):
     db = _get_db()
 
     try:
-        response = db.auth.sign_in_with_password({"email": body.email, "password": body.password})
-    except Exception:
+        data = db.auth.sign_in_with_password({"email": body.email, "password": body.password})
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+    if not data.user:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
-    if not response.user:
-        raise HTTPException(status_code=401, detail="Credenciales inválidas")
-
-    user_id = str(response.user.id)
+    user_id = str(data.user.id)
 
     profile_res = db.table("profiles").select("id, name, email, created_at").eq("id", user_id).limit(1).execute()
     profile = profile_res.data[0] if profile_res.data else None
 
     return {
         "user_id": user_id,
-        "name": profile["name"] if profile else response.user.email,
-        "email": response.user.email,
+        "name": profile["name"] if profile else data.user.email,
+        "email": data.user.email,
         "created_at": profile["created_at"] if profile else None,
+        "access_token": data.session.access_token if data.session else None,
+    }
+
+
+@router.post("/register", status_code=201, summary="Create a new user account")
+def register(body: RegisterRequest):
+    if len(body.password) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+
+    db = _get_db()
+
+    try:
+        data = db.auth.admin.create_user({
+            "email": body.email,
+            "password": body.password,
+            "email_confirm": True,
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not data.user:
+        raise HTTPException(status_code=400, detail="No se pudo crear el usuario")
+
+    user_id = str(data.user.id)
+
+    try:
+        db.table("profiles").insert({
+            "id": user_id,
+            "email": body.email,
+            "name": body.name,
+        }).execute()
+    except Exception as e:
+        # Roll back the auth user so the state stays consistent
+        db.auth.admin.delete_user(user_id)
+        raise HTTPException(status_code=500, detail=f"Error al crear el perfil: {e}")
+
+    return {
+        "user_id": user_id,
+        "name": body.name,
+        "email": body.email,
     }
 
 
@@ -63,7 +109,11 @@ def change_password(body: ChangePasswordRequest):
     db = _get_db()
 
     try:
-        db.auth.sign_in_with_password({"email": body.email, "password": body.current_password})
+        data = db.auth.sign_in_with_password({"email": body.email, "password": body.current_password})
+        if not data.user:
+            raise HTTPException(status_code=401, detail="La contraseña actual es incorrecta")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=401, detail="La contraseña actual es incorrecta")
 

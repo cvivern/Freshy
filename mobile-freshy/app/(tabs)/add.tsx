@@ -18,41 +18,27 @@ import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
 import {
   API_BASE,
-  DEFAULT_HOUSEHOLD_ID,
-  DEFAULT_STORAGE_AREA_ID,
-  DEFAULT_USER_ID,
   CLIMATE_EMOJI,
   addToInventory,
   createHousehold,
   createStorageArea,
   deleteHousehold,
   deleteStorageArea,
-  detectOtroProducto,
   fetchHouseholds,
   fetchInventoryItems,
   fetchStorageAreas,
   getFruitName,
   identifyFruits,
   scanBarcodeImage,
+  scanPackagedProduct,
   toISODate,
 } from '@/services/api';
-import type { BarcodeInfo, Detection, Household, InventoryItem, ProductInfo, StorageArea } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
+import type { BarcodeInfo, Detection, Household, InventoryItem, PackagedScanResult, ProductInfo, StorageArea } from '@/services/api';
 
 // Fallback data matching seed.sql (used when backend endpoints aren't deployed yet)
-const FALLBACK_HOUSEHOLDS: Household[] = [
-  { id: '00000000-0000-0000-0000-000000000001', name: 'Departamento Buenos Aires', owner_id: DEFAULT_USER_ID },
-  { id: '00000000-0000-0000-0000-000000000002', name: 'Casa de Campo', owner_id: DEFAULT_USER_ID },
-];
+const FALLBACK_HOUSEHOLDS: Household[] = [];
 const FALLBACK_SPACES: Record<string, StorageArea[]> = {
-  '00000000-0000-0000-0000-000000000001': [
-    { id: '00000000-0000-0000-0001-000000000001', name: 'Heladera Principal', climate: 'refrigerado', household_id: '00000000-0000-0000-0000-000000000001' },
-    { id: '00000000-0000-0000-0001-000000000002', name: 'Alacena Cocina', climate: 'seco', household_id: '00000000-0000-0000-0000-000000000001' },
-    { id: '00000000-0000-0000-0001-000000000003', name: 'Freezer', climate: 'congelado', household_id: '00000000-0000-0000-0000-000000000001' },
-  ],
-  '00000000-0000-0000-0000-000000000002': [
-    { id: '00000000-0000-0000-0001-000000000004', name: 'Heladera', climate: 'refrigerado', household_id: '00000000-0000-0000-0000-000000000002' },
-    { id: '00000000-0000-0000-0001-000000000005', name: 'Despensa', climate: 'seco', household_id: '00000000-0000-0000-0000-000000000002' },
-  ],
 };
 
 // ------- Types -------
@@ -65,6 +51,9 @@ type Phase =
   | 'product_popup'      // popup sobre la foto: categoría + marca + nombre
   | 'fruit_confirm'      // confirmar detección una a una: Sí / No
   | 'fruit_expiry'       // pedir fecha de vencimiento para fruta confirmada
+  | 'pkg_detecting'      // spinner mientras el backend procesa foto de producto envasado
+  | 'pkg_partial'        // faltan campos — mostrar lo encontrado + pedir otra foto
+  | 'pkg_confirm'        // todos los campos (o máx fotos) — confirmar y guardar
   | 'camera_barcode'     // cámara in-app para código/fecha
   | 'detecting_barcode'  // procesando segunda foto (vision AI lee barcode+fecha)
   | 'barcode_popup';     // popup con datos leídos (editables) → guardar
@@ -91,6 +80,7 @@ const ADD_TABS: { key: AddTab; label: string }[] = [
 
 // ------- Main Screen -------
 export default function AddScreen() {
+  const { user } = useAuth();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
 
@@ -104,6 +94,8 @@ export default function AddScreen() {
   const [detectionIndex, setDetectionIndex] = useState(0);
   const [fruitExpiry, setFruitExpiry] = useState('');
   const [selectedDays, setSelectedDays] = useState<number | null>(null);
+  const [pkgData, setPkgData] = useState<PackagedScanResult>({ name: null, brand: null, expiry_date: null });
+  const [pkgPhotoCount, setPkgPhotoCount] = useState(0);
   const [restock, setRestock] = useState<RestockState | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
@@ -120,11 +112,11 @@ export default function AddScreen() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>('');
 
   React.useEffect(() => {
-    fetchInventoryItems()
+    fetchInventoryItems(user?.user_id ?? '', undefined, user?.access_token)
       .then(setInventoryItems)
       .catch(() => {})
       .finally(() => setLoadingInventory(false));
-    fetchHouseholds(DEFAULT_USER_ID)
+    fetchHouseholds(user?.user_id ?? '', user?.access_token)
       .then((hhs) => {
         const list = hhs.length > 0 ? hhs : FALLBACK_HOUSEHOLDS;
         setHouseholds(list);
@@ -148,7 +140,7 @@ export default function AddScreen() {
 
   async function handleAddSpace() {
     if (!newSpaceName.trim()) return;
-    const householdId = selectedHouseholdId || DEFAULT_HOUSEHOLD_ID;
+    const householdId = selectedHouseholdId || '';
     const emoji = newSpaceEmoji.trim() || undefined;
     try {
       const created = await createStorageArea(householdId, newSpaceName.trim(), newSpaceClimate);
@@ -191,12 +183,12 @@ export default function AddScreen() {
     if (!newHouseholdName.trim()) return;
     const name = newHouseholdName.trim();
     // Cierra el modal y agrega optimistamente
-    const optimistic: Household = { id: `local-${Date.now()}`, name, owner_id: DEFAULT_USER_ID };
+    const optimistic: Household = { id: `local-${Date.now()}`, name, owner_id: user?.user_id ?? '' };
     setHouseholds((p) => [...p, optimistic]);
     if (!selectedHouseholdId) setSelectedHouseholdId(optimistic.id);
     setHouseholdModal(false);
     // Persiste en DB en background, reemplaza el local con el real si funciona
-    createHousehold(DEFAULT_USER_ID, name)
+    createHousehold(user?.user_id ?? '', name, user?.access_token)
       .then((created) => {
         setHouseholds((p) => p.map((h) => h.id === optimistic.id ? created : h));
         setSelectedHouseholdId((prev) => prev === optimistic.id ? created.id : prev);
@@ -252,9 +244,9 @@ export default function AddScreen() {
     const photo = await cameraRef.current?.takePictureAsync({ quality: 0.85 });
     if (!photo) return;
     setPhotoUri(photo.uri);
-    setPhase('detecting_product');
     try {
       if (category === 'fruta_verdura') {
+        setPhase('detecting_product');
         const dets = await identifyFruits(photo.uri);
         setDetections(dets);
         setDetectionIndex(0);
@@ -265,9 +257,18 @@ export default function AddScreen() {
           setPhase('fruit_confirm');
         }
       } else {
-        const info = await detectOtroProducto(photo.uri);
-        setProductInfo(info);
-        setPhase('product_popup');
+        setPhase('pkg_detecting');
+        const result = await scanPackagedProduct(photo.uri);
+        const newCount = pkgPhotoCount + 1;
+        const merged: PackagedScanResult = {
+          name: result.name ?? pkgData.name,
+          brand: result.brand ?? pkgData.brand,
+          expiry_date: result.expiry_date ?? pkgData.expiry_date,
+        };
+        setPkgData(merged);
+        setPkgPhotoCount(newCount);
+        const complete = !!(merged.name && merged.brand && merged.expiry_date);
+        setPhase(complete || newCount >= 5 ? 'pkg_confirm' : 'pkg_partial');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error desconocido';
@@ -306,7 +307,7 @@ export default function AddScreen() {
     }
     try {
       await addToInventory({
-        storage_area_id: DEFAULT_STORAGE_AREA_ID,
+        storage_area_id: spaces[0]?.id ?? '',
         product_name: productInfo.name,
         product_brand: productInfo.brand !== '—' ? productInfo.brand : undefined,
         product_category: productInfo.category,
@@ -349,7 +350,7 @@ export default function AddScreen() {
         await Promise.all(
           newDates.map((expiry) =>
             addToInventory({
-              storage_area_id: DEFAULT_STORAGE_AREA_ID,
+              storage_area_id: spaces[0]?.id ?? '',
               product_name: restock.product.nombre,
               product_brand: restock.product.marca ?? undefined,
               emoji: restock.product.emoji ?? undefined,
@@ -378,6 +379,8 @@ export default function AddScreen() {
     setDetectionIndex(0);
     setFruitExpiry('');
     setSelectedDays(null);
+    setPkgData({ name: null, brand: null, expiry_date: null });
+    setPkgPhotoCount(0);
   }
 
   function handleFruitConfirmYes() {
@@ -413,7 +416,7 @@ export default function AddScreen() {
     const name = getFruitName(det.label);
     try {
       await addToInventory({
-        storage_area_id: DEFAULT_STORAGE_AREA_ID,
+        storage_area_id: spaces[0]?.id ?? '',
         product_name: name,
         product_category: 'Frutas y verduras',
         quantity: 1,
@@ -427,6 +430,28 @@ export default function AddScreen() {
         Alert.alert('¡Guardado!', `${name} fue agregado al inventario.`);
         reset();
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      Alert.alert('No se pudo guardar', msg);
+    }
+  }
+
+  async function handlePkgSave() {
+    if (!pkgData.name?.trim()) {
+      Alert.alert('Nombre requerido', 'Ingresá al menos el nombre del producto.');
+      return;
+    }
+    try {
+      await addToInventory({
+        storage_area_id: spaces[0]?.id ?? '',
+        product_name: pkgData.name,
+        product_brand: pkgData.brand ?? undefined,
+        product_category: 'Producto envasado',
+        quantity: 1,
+        expiry_date: pkgData.expiry_date ? toISODate(pkgData.expiry_date) : undefined,
+      });
+      Alert.alert('¡Guardado!', `${pkgData.name} fue agregado al inventario.`);
+      reset();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error desconocido';
       Alert.alert('No se pudo guardar', msg);
@@ -577,7 +602,7 @@ export default function AddScreen() {
                   onChangeText={(v) => { setFruitExpiry(v); setSelectedDays(null); }}
                   placeholder="DD/MM/AAAA"
                   placeholderTextColor="#BBB"
-                  keyboardType="numeric"
+                  // keyboardType="numeric"
                 />
               </View>
 
@@ -587,6 +612,146 @@ export default function AddScreen() {
                   <Text style={styles.secondaryBtnText}>Volver</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handleFruitSave}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                  <Text style={styles.primaryBtnText}>Guardar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        )}
+      </View>
+    );
+  }
+
+  // ================================================================
+  // PACKAGED PRODUCT — detecting / partial / confirm
+  // ================================================================
+  if (phase === 'pkg_detecting' || phase === 'pkg_partial' || phase === 'pkg_confirm') {
+    const FIELDS: { key: keyof PackagedScanResult; label: string }[] = [
+      { key: 'name', label: 'Nombre' },
+      { key: 'brand', label: 'Marca' },
+      { key: 'expiry_date', label: 'Fecha de vencimiento' },
+    ];
+
+    return (
+      <View style={styles.fullscreen}>
+        {photoUri && <Image source={{ uri: photoUri }} style={styles.photoBackground} resizeMode="cover" />}
+        <View style={styles.photoDim} />
+
+        {/* ---- Spinner ---- */}
+        {phase === 'pkg_detecting' && (
+          <View style={styles.detectingOverlay}>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={styles.detectingText}>
+              Analizando producto… ({pkgPhotoCount + 1}/5)
+            </Text>
+          </View>
+        )}
+
+        {/* ---- Partial results ---- */}
+        {phase === 'pkg_partial' && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.card}>
+              <View style={styles.successRow}>
+                <Ionicons name="scan-outline" size={26} color="#A8CFEE" />
+                <Text style={styles.cardTitle}>Lo que encontramos</Text>
+              </View>
+              <Text style={[styles.aiHint, { textAlign: 'right' }]}>
+                Foto {pkgPhotoCount} de 5
+              </Text>
+              <View style={styles.detectedBox}>
+                {FIELDS.map((f, i) => {
+                  const found = pkgData[f.key] !== null;
+                  return (
+                    <React.Fragment key={f.key}>
+                      {i > 0 && <View style={styles.detectedDivider} />}
+                      <View style={styles.detectedRow}>
+                        <Text style={styles.detectedLabel}>{f.label}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons
+                            name={found ? 'checkmark-circle' : 'ellipse-outline'}
+                            size={18}
+                            color={found ? '#27AE60' : '#CCC'}
+                          />
+                          <Text style={[styles.detectedValue, !found && { color: '#CCC' }]}>
+                            {found ? String(pkgData[f.key]) : 'Falta'}
+                          </Text>
+                        </View>
+                      </View>
+                    </React.Fragment>
+                  );
+                })}
+              </View>
+              <View style={styles.btnRow}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPhase('pkg_confirm')}>
+                  <Text style={styles.secondaryBtnText}>Confirmar así</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={() => setPhase('camera_product')}>
+                  <Ionicons name="camera-outline" size={18} color="#fff" />
+                  <Text style={styles.primaryBtnText}>Otra foto</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* ---- Confirm + edit ---- */}
+        {phase === 'pkg_confirm' && (
+          <KeyboardAvoidingView
+            style={styles.modalOverlay}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <View style={styles.card}>
+              <View style={styles.successRow}>
+                <Ionicons name="checkmark-circle" size={28} color="#27AE60" />
+                <Text style={styles.cardTitle}>Confirmá los datos</Text>
+              </View>
+              <Text style={styles.aiHint}>
+                Corregí cualquier campo antes de guardar.
+              </Text>
+
+              <View>
+                <Text style={styles.fieldLabel}>Nombre <Text style={styles.optional}>(requerido)</Text></Text>
+                <TextInput
+                  style={styles.input}
+                  value={pkgData.name ?? ''}
+                  onChangeText={(v) => setPkgData((p) => ({ ...p, name: v || null }))}
+                  placeholder="Ej: Leche Entera"
+                  placeholderTextColor="#BBB"
+                />
+              </View>
+
+              <View>
+                <Text style={styles.fieldLabel}>Marca</Text>
+                <TextInput
+                  style={styles.input}
+                  value={pkgData.brand ?? ''}
+                  onChangeText={(v) => setPkgData((p) => ({ ...p, brand: v || null }))}
+                  placeholder="Ej: La Serenísima"
+                  placeholderTextColor="#BBB"
+                />
+              </View>
+
+              <View>
+                <Text style={styles.fieldLabel}>Fecha de vencimiento</Text>
+                <TextInput
+                  style={styles.input}
+                  value={pkgData.expiry_date ?? ''}
+                  onChangeText={(v) => setPkgData((p) => ({ ...p, expiry_date: v || null }))}
+                  placeholder="DD/MM/AAAA o YYYY-MM-DD"
+                  placeholderTextColor="#BBB"
+                  // keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.btnRow}>
+                {pkgPhotoCount < 5 && (
+                  <TouchableOpacity style={styles.secondaryBtn} onPress={() => setPhase('camera_product')}>
+                    <Ionicons name="camera-outline" size={16} color="#888" />
+                    <Text style={styles.secondaryBtnText}>Otra foto</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handlePkgSave}>
                   <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
                   <Text style={styles.primaryBtnText}>Guardar</Text>
                 </TouchableOpacity>
@@ -994,7 +1159,7 @@ export default function AddScreen() {
                   }}
                   placeholder="DD/MM/AAAA"
                   placeholderTextColor="#BBB"
-                  keyboardType="numeric"
+                  // keyboardType="numeric"
                   autoFocus
                 />
                 {/* Fechas ya ingresadas */}
@@ -1273,7 +1438,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#A8CFEE',
+    backgroundColor: '#3A7CA5',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 20,
@@ -1285,12 +1450,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderWidth: 1.5,
-    borderColor: '#DDD',
+    borderColor: '#999',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 16,
+    backgroundColor: '#F0F0F0',
   },
-  secondaryBtnText: { fontSize: 14, color: '#888', fontWeight: '600' },
+  secondaryBtnText: { fontSize: 14, color: '#555', fontWeight: '600' },
 
   // Tab bar
   tabBar: {
