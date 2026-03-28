@@ -1,10 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Image, StyleSheet } from 'react-native';
 
 export default function AppHeader() {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>freshy</Text>
+      <Image
+        source={require('../assets/images/logo_blanco_sin_fondo_grande_arbol_recadre.png')}
+        style={styles.logo}
+        resizeMode="contain"
+      />
     </View>
   );
 }
@@ -12,14 +16,11 @@ export default function AppHeader() {
 const styles = StyleSheet.create({
   header: {
     backgroundColor: '#A8CFEE',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 6,
   },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '800',
-    fontStyle: 'italic',
+  logo: {
+    height: 70,
+    width: 150,
   },
 });
