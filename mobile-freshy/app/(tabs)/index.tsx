@@ -8,6 +8,7 @@ import {
   Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppHeader from '@/components/AppHeader';
 
 const FRIDGES = ['Casa', 'Oficina'];
 
@@ -95,10 +96,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>freshy</Text>
-      </View>
+      <AppHeader />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {/* Heladera selector */}
@@ -212,18 +210,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  header: {
-    backgroundColor: '#D4827A',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '800',
-    fontStyle: 'italic',
   },
   scroll: {
     flex: 1,
