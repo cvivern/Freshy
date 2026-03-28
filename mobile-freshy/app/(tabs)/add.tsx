@@ -16,10 +16,17 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
-
-// ------- Config -------
-// Android emulator → 10.0.2.2 | iOS simulator → localhost | dispositivo físico → IP de tu PC
-const API_BASE = 'http://10.0.2.2:8000';
+import {
+  API_BASE,
+  DEFAULT_STORAGE_AREA_ID,
+  addToInventory,
+  detectFrutaVerdura,
+  detectOtroProducto,
+  fetchInventoryItems,
+  scanBarcodeImage,
+  toISODate,
+} from '@/services/api';
+import type { BarcodeInfo, InventoryItem, ProductInfo } from '@/services/api';
 
 // ------- Types -------
 type ProductCategory = 'fruta_verdura' | 'otro';
@@ -33,12 +40,8 @@ type Phase =
   | 'detecting_barcode'  // procesando segunda foto (vision AI lee barcode+fecha)
   | 'barcode_popup';     // popup con datos leídos (editables) → guardar
 
-type Detection = { label: string; confidence: number };
-type ProductInfo = { category: string; brand: string; name: string };
-type BarcodeInfo = { barcode: string; expiryDate: string };
-type FavoriteProduct = { id: number; emoji: string; name: string };
 type RestockState = {
-  product: FavoriteProduct;
+  product: InventoryItem;
   step: 'qty' | 'dates';
   qty: string;
   dates: string[];       // fechas ya ingresadas
@@ -46,86 +49,24 @@ type RestockState = {
   currentIndex: number;  // índice actual (0-based)
 };
 
-// ------- Label mapping (Roboflow fruit-b2sy0) -------
-const LABEL_MAP: Record<string, string> = {
-  apple_fresh:       'Manzana',
-  apple_rotten:      'Manzana (en mal estado)',
-  banana_fresh:      'Banana',
-  banana_rotten:     'Banana (en mal estado)',
-  orange_fresh:      'Naranja',
-  orange_rotten:     'Naranja (en mal estado)',
-  mango_fresh:       'Mango',
-  mango_rotten:      'Mango (en mal estado)',
-  strawberry_fresh:  'Frutilla',
-  strawberry_rotten: 'Frutilla (en mal estado)',
-  grapes_fresh:      'Uvas',
-  grapes_rotten:     'Uvas (en mal estado)',
-  watermelon_fresh:  'Sandía',
-  pineapple_fresh:   'Ananá',
-  lemon_fresh:       'Limón',
-};
+// ------- Tab types -------
+type AddTab = 'productos' | 'espacios' | 'hogares';
 
-function parseFruitDetections(detections: Detection[]): ProductInfo {
-  if (!detections.length) return { category: 'Frutas y verduras', brand: '—', name: 'No reconocido' };
-  const best = detections.reduce((a, b) => (a.confidence > b.confidence ? a : b));
-  const name = LABEL_MAP[best.label] ?? best.label.replace(/_/g, ' ');
-  return { category: 'Frutas y verduras', brand: '—', name };
-}
+const ADD_TABS: { key: AddTab; label: string }[] = [
+  { key: 'productos', label: 'Productos' },
+  { key: 'espacios', label: 'Espacios' },
+  { key: 'hogares', label: 'Hogares' },
+];
 
-// ------- API calls -------
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 30000): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    return response;
-  } catch (err: any) {
-    if (err?.name === 'AbortError') throw new Error('La solicitud tardó demasiado. Verificá que el backend esté corriendo.');
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-}
+// ------- Mock Data for Espacios / Hogares -------
+const SPACES = [
+  { id: 1, emoji: '🧊', name: 'Heladera' },
+  { id: 2, emoji: '🗄️', name: 'Alacena' },
+  { id: 3, emoji: '🥶', name: 'Freezer' },
+];
 
-async function detectFrutaVerdura(uri: string): Promise<ProductInfo> {
-  const formData = new FormData();
-  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
-  const response = await fetchWithTimeout(`${API_BASE}/detection/fruits`, { method: 'POST', body: formData });
-  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
-  const data = await response.json();
-  return parseFruitDetections((data.detections ?? []) as Detection[]);
-}
-
-async function detectOtroProducto(uri: string): Promise<ProductInfo> {
-  const formData = new FormData();
-  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
-  const response = await fetchWithTimeout(`${API_BASE}/detection/scan/product`, { method: 'POST', body: formData });
-  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
-  const data = await response.json();
-  return {
-    category: 'Producto envasado',
-    brand: data.brand ?? '—',
-    name: data.name ?? '—',
-  };
-}
-
-async function scanBarcodeImage(uri: string): Promise<BarcodeInfo> {
-  const formData = new FormData();
-  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
-  const response = await fetchWithTimeout(`${API_BASE}/detection/scan/barcode`, { method: 'POST', body: formData });
-  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
-  const data = await response.json();
-  return {
-    barcode: data.barcode ?? '',
-    expiryDate: data.expiry_date ?? '',
-  };
-}
-
-// ------- Mock Data -------
-const FAVORITE_PRODUCTS: FavoriteProduct[] = [
-  { id: 1, emoji: '🍞', name: 'Pan' },
-  { id: 2, emoji: '🧈', name: 'Manteca' },
-  { id: 3, emoji: '🍌', name: 'Banana' },
+const HOUSEHOLDS = [
+  { id: 1, emoji: '🏠', name: 'Casa de Cata', members: 2 },
 ];
 
 // ------- Tab types -------
@@ -160,6 +101,15 @@ export default function AddScreen() {
   const [productInfo, setProductInfo] = useState<ProductInfo>({ category: '', brand: '', name: '' });
   const [barcodeInfo, setBarcodeInfo] = useState<BarcodeInfo>({ barcode: '', expiryDate: '' });
   const [restock, setRestock] = useState<RestockState | null>(null);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [loadingInventory, setLoadingInventory] = useState(true);
+
+  React.useEffect(() => {
+    fetchInventoryItems()
+      .then(setInventoryItems)
+      .catch(() => {})
+      .finally(() => setLoadingInventory(false));
+  }, []);
 
   function selectCategory(cat: ProductCategory) {
     setCategory(cat);
@@ -222,17 +172,30 @@ export default function AddScreen() {
     setPhase('barcode_popup');
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!barcodeInfo.expiryDate.trim()) {
       Alert.alert('Fecha requerida', 'Ingresá la fecha de vencimiento.');
       return;
     }
-    // TODO: insertar en Supabase tabla inventory
-    Alert.alert('¡Producto guardado!', `${productInfo.name} fue agregado a tu inventario.`);
-    reset();
+    try {
+      await addToInventory({
+        storage_area_id: DEFAULT_STORAGE_AREA_ID,
+        product_name: productInfo.name,
+        product_brand: productInfo.brand !== '—' ? productInfo.brand : undefined,
+        product_category: productInfo.category,
+        barcode: barcodeInfo.barcode || undefined,
+        quantity: 1,
+        expiry_date: toISODate(barcodeInfo.expiryDate),
+      });
+      Alert.alert('¡Producto guardado!', `${productInfo.name} fue agregado a tu inventario.`);
+      reset();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      Alert.alert('No se pudo guardar', msg);
+    }
   }
 
-  function openRestock(product: FavoriteProduct) {
+  function openRestock(product: InventoryItem) {
     setRestock({ product, step: 'qty', qty: '', dates: [], currentDate: '', currentIndex: 0 });
   }
 
@@ -246,7 +209,7 @@ export default function AddScreen() {
     setRestock((p) => p ? { ...p, step: 'dates', currentIndex: 0, currentDate: '' } : p);
   }
 
-  function handleRestockDateNext() {
+  async function handleRestockDateNext() {
     if (!restock) return;
     if (!restock.currentDate.trim()) {
       Alert.alert('Fecha requerida', 'Ingresá la fecha de vencimiento.');
@@ -255,9 +218,25 @@ export default function AddScreen() {
     const total = parseInt(restock.qty, 10);
     const newDates = [...restock.dates, restock.currentDate];
     if (newDates.length >= total) {
-      // TODO: insertar en Supabase tabla inventory (newDates.length entradas)
-      Alert.alert('¡Restock guardado!', `${total} ${restock.product.name} agregados al inventario.`);
-      setRestock(null);
+      try {
+        await Promise.all(
+          newDates.map((expiry) =>
+            addToInventory({
+              storage_area_id: DEFAULT_STORAGE_AREA_ID,
+              product_name: restock.product.nombre,
+              product_brand: restock.product.marca ?? undefined,
+              emoji: restock.product.emoji ?? undefined,
+              quantity: 1,
+              expiry_date: toISODate(expiry),
+            })
+          )
+        );
+        Alert.alert('¡Restock guardado!', `${total} ${restock.product.nombre} agregados al inventario.`);
+        setRestock(null);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error desconocido';
+        Alert.alert('No se pudo guardar', msg);
+      }
     } else {
       setRestock((p) => p ? { ...p, dates: newDates, currentDate: '', currentIndex: p.currentIndex + 1 } : p);
     }
@@ -505,6 +484,29 @@ export default function AddScreen() {
               <View style={styles.dividerLine} />
             </View>
 
+<<<<<<< HEAD
+            <Text style={styles.description}>Tus productos en stock — agregá más unidades rápido.</Text>
+            {loadingInventory ? (
+              <ActivityIndicator size="small" color="#888" style={{ marginTop: 12 }} />
+            ) : inventoryItems.length === 0 ? (
+              <Text style={{ color: '#AAA', textAlign: 'center', marginTop: 12 }}>
+                No hay productos en el inventario todavía.
+              </Text>
+            ) : (
+              inventoryItems.map((product) => (
+                <View key={product.id} style={styles.productRow}>
+                  <Text style={styles.productEmoji}>{product.emoji ?? '📦'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.productName}>{product.nombre}</Text>
+                    {product.marca ? <Text style={{ color: '#AAA', fontSize: 12 }}>{product.marca}</Text> : null}
+                  </View>
+                  <TouchableOpacity style={styles.addButton} onPress={() => openRestock(product)}>
+                    <Ionicons name="add" size={22} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+=======
             <Text style={styles.description}>Tus productos favoritos — agregálos rápido sin escanear.</Text>
             {FAVORITE_PRODUCTS.map((product) => (
               <View key={product.id} style={styles.productRow}>
@@ -515,6 +517,7 @@ export default function AddScreen() {
                 </TouchableOpacity>
               </View>
             ))}
+>>>>>>> 15739df467e882f02e8a87c864204587c1b61660
           </>
         )}
 
@@ -568,9 +571,9 @@ export default function AddScreen() {
           <View style={styles.card}>
             {/* Header */}
             <View style={styles.successRow}>
-              <Text style={styles.productEmoji}>{restock?.product.emoji}</Text>
+              <Text style={styles.productEmoji}>{restock?.product.emoji ?? '📦'}</Text>
               <View>
-                <Text style={styles.cardTitle}>{restock?.product.name}</Text>
+                <Text style={styles.cardTitle}>{restock?.product.nombre}</Text>
                 {restock?.step === 'dates' && (
                   <Text style={styles.aiHint}>
                     Unidad {(restock.currentIndex ?? 0) + 1} de {restock.qty}
