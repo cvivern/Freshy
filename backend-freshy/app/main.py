@@ -3,8 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.controllers.detection_controller import router as detection_router
 from app.controllers.fruit_controller import router as fruit_router
+from app.controllers.household_controller import router as household_router
 from app.controllers.inventory_controller import router as inventory_router
 from app.controllers.product_controller import router as product_router
+from app.controllers.storage_area_controller import router as storage_area_router
 from app.core.config import settings
 
 app = FastAPI(
@@ -35,6 +37,8 @@ app.include_router(product_router, prefix=API_PREFIX)
 app.include_router(fruit_router, prefix=API_PREFIX)
 app.include_router(inventory_router, prefix=API_PREFIX)
 app.include_router(detection_router, prefix=API_PREFIX)
+app.include_router(household_router, prefix=API_PREFIX)
+app.include_router(storage_area_router, prefix=API_PREFIX)
 
 
 # ---------------------------------------------------------------------------
@@ -42,4 +46,8 @@ app.include_router(detection_router, prefix=API_PREFIX)
 # ---------------------------------------------------------------------------
 @app.get("/health", tags=["Health"])
 def health_check():
-    return {"status": "ok", "version": settings.app_version}
+    return {
+        "status": "ok",
+        "version": settings.app_version,
+        "routes": ["/api/v1/inventory", "/api/v1/households", "/api/v1/storage-areas"],
+    }

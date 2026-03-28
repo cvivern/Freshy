@@ -64,7 +64,7 @@ def list_inventory(
 
 
 @router.post(
-    "/",
+    "/detected",
     status_code=status.HTTP_201_CREATED,
     summary="Add detected items to inventory",
 )
