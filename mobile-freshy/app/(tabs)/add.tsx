@@ -162,16 +162,20 @@ export default function AddScreen() {
   }
 
   async function handleDeleteSpace(space: StorageArea) {
-    Alert.alert('Eliminar espacio', `¿Querés eliminar "${space.name}"?`, [
+    Alert.alert('Eliminar espacio', `¿Querés eliminar "${space.name}"? También se eliminarán los productos en ese espacio.`, [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: 'Eliminar', style: 'destructive', onPress: () => {
-          // Remove from UI immediately
-          setSpaces((p) => p.filter((s) => s.id !== space.id));
-          // Persist to DB in background (skip for local-only items)
+        text: 'Eliminar', style: 'destructive', onPress: async () => {
           if (!space.id.startsWith('local-')) {
-            deleteStorageArea(space.id).catch(() => {});
+            try {
+              await deleteStorageArea(space.id);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Error desconocido';
+              Alert.alert('No se pudo eliminar', msg);
+              return;
+            }
           }
+          setSpaces((p) => p.filter((s) => s.id !== space.id));
         }
       },
     ]);
@@ -193,20 +197,25 @@ export default function AddScreen() {
   }
 
   async function handleDeleteHousehold(hh: Household) {
-    Alert.alert('Eliminar hogar', `¿Querés eliminar "${hh.name}"?`, [
+    Alert.alert('Eliminar hogar', `¿Querés eliminar "${hh.name}"? También se eliminarán sus espacios y productos.`, [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: 'Eliminar', style: 'destructive', onPress: () => {
-          // Remove from UI immediately
+        text: 'Eliminar', style: 'destructive', onPress: async () => {
+          if (!hh.id.startsWith('local-')) {
+            try {
+              await deleteHousehold(hh.id);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Error desconocido';
+              Alert.alert('No se pudo eliminar', msg);
+              return;
+            }
+          }
           setHouseholds((p) => p.filter((h) => h.id !== hh.id));
           if (selectedHouseholdId === hh.id) {
             const remaining = households.filter((h) => h.id !== hh.id);
             setSelectedHouseholdId(remaining.length > 0 ? remaining[0].id : '');
           }
-          // Persist to DB in background (skip for local-only items)
-          if (!hh.id.startsWith('local-')) {
-            deleteHousehold(hh.id).catch(() => {});
-          }
+          setSpaces((p) => p.filter((s) => s.id !== hh.id));
         }
       },
     ]);
