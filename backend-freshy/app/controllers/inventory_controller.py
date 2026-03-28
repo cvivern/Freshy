@@ -1,0 +1,48 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
+
+from app.core.supabase import get_supabase_client
+from app.models.inventory import InventoryItemResponse
+from app.repositories.inventory_repository import InventoryRepository
+from app.services.inventory_service import InventoryService
+
+router = APIRouter(prefix="/inventory", tags=["Inventory"])
+
+
+# ---------------------------------------------------------------------------
+# Dependency injection
+# ---------------------------------------------------------------------------
+
+def get_inventory_service() -> InventoryService:
+    client = get_supabase_client()
+    repo = InventoryRepository(client)
+    return InventoryService(repo)
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/",
+    response_model=list[InventoryItemResponse],
+    summary="List inventory items for a storage area",
+)
+def list_inventory(
+    user_id: str = Query(..., description="Profile ID of the requesting user"),
+    storage_area_id: UUID = Query(..., description="UUID of the storage area"),
+    categoria: str | None = Query(None, description="Filter by category (partial match)"),
+    nombre: str | None = Query(None, description="Filter by product name (partial match)"),
+    marca: str | None = Query(None, description="Filter by brand (partial match)"),
+    estado: str | None = Query(None, description="Filter by status: fresco | por_vencer | vencido"),
+    service: InventoryService = Depends(get_inventory_service),
+):
+    return service.get_inventory(
+        storage_area_id=storage_area_id,
+        user_id=user_id,
+        categoria=categoria,
+        nombre=nombre,
+        marca=marca,
+        estado=estado,
+    )
