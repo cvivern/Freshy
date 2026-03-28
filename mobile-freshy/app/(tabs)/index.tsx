@@ -31,6 +31,55 @@ const FILTERS = [
   { key: 'vencidos', label: 'Vencidos' },
 ];
 
+// ─── Fuzzy search ────────────────────────────────────────────────────────────
+
+/** Returns true if all chars of `query` appear in `target` in order (subsequence). */
+function isSubsequence(query: string, target: string): boolean {
+  let qi = 0;
+  for (let ti = 0; ti < target.length && qi < query.length; ti++) {
+    if (query[qi] === target[ti]) qi++;
+  }
+  return qi === query.length;
+}
+
+/** Levenshtein edit distance between two strings. */
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[] = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+/**
+ * Fuzzy-matches a single token against a target string.
+ * Accepts: exact substring, subsequence, or edit distance ≤ floor(token.length/3) (min 1 for len≥3).
+ */
+function fuzzyToken(token: string, target: string): boolean {
+  if (target.includes(token)) return true;
+  if (isSubsequence(token, target)) return true;
+  if (token.length >= 3) {
+    const threshold = Math.floor(token.length / 3);
+    // Check against each word in target individually for better precision
+    return target.split(/\s+/).some(word => editDistance(token, word) <= threshold);
+  }
+  return false;
+}
+
+/** Returns true if every token in the query fuzzy-matches somewhere in the haystack. */
+function fuzzyMatch(query: string, haystack: string): boolean {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const h = haystack.toLowerCase();
+  return tokens.every(token => fuzzyToken(token, h));
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function getDaysLeft(fechaVencimiento: string | null): number {
@@ -158,7 +207,10 @@ export default function HomeScreen() {
   const filteredItems = items
     .filter(item => {
       const daysLeft = getDaysLeft(item.fecha_vencimiento);
-      if (search && !item.nombre.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search.trim()) {
+        const haystack = [item.nombre, item.marca, item.categoria].filter(Boolean).join(' ');
+        if (!fuzzyMatch(search, haystack)) return false;
+      }
       if (activeFilter === 'vence_pronto') return daysLeft >= 0 && daysLeft <= 7;
       if (activeFilter === 'buen_estado') return daysLeft > 7;
       if (activeFilter === 'vencidos') return daysLeft < 0;
@@ -200,6 +252,11 @@ export default function HomeScreen() {
                 placeholder="Buscar alimentos"
                 placeholderTextColor="#aaa"
               />
+              {search.length > 0 && (
+                <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={16} color="#bbb" />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
           <View style={{ flex: 1 }}>
@@ -257,6 +314,9 @@ export default function HomeScreen() {
             const badge = getStatusBadge(daysLeft);
             const estado = calcEstado(item.fecha_vencimiento);
             const estadoLabel = estado === 'fresco' ? 'Fresco' : estado === 'por_vencer' ? 'Por vencer' : 'Vencido';
+            // Progress: assume shelfLife = 30d fresh, 7d por_vencer, already expired
+            const shelfLife = estado === 'vencido' ? 1 : estado === 'por_vencer' ? 7 : 30;
+            const progress = Math.min(1, Math.max(0, (shelfLife - daysLeft) / shelfLife));
             return (
               <View key={item.id} style={[styles.foodCard, { borderColor: getBorderColor(daysLeft) }]}>
                 <View style={styles.cardTopRow}>
@@ -267,6 +327,10 @@ export default function HomeScreen() {
                 <Text style={styles.foodCategory}>
                   {item.categoria ?? ''}{item.marca ? ` - ${item.marca}` : ''}
                 </Text>
+
+                <View style={styles.progressTrack}>
+                  <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: getBorderColor(daysLeft) }]} />
+                </View>
 
                 <View style={styles.expiryRow}>
                   <Text style={styles.expiryLabel}>Vencimiento</Text>
@@ -314,6 +378,8 @@ const styles = StyleSheet.create({
   foodEmoji: { fontSize: 18 },
   foodName: { fontSize: 16, fontWeight: '700', color: '#222', marginTop: 2 },
   foodCategory: { fontSize: 14, color: '#A8CFEE', marginBottom: 8, marginLeft: 35 },
+  progressTrack: { height: 8, backgroundColor: '#E0E0E0', borderRadius: 4, marginBottom: 8, overflow: 'hidden' },
+  progressFill: { height: 8, borderRadius: 4 },
   expiryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   expiryLabel: { fontSize: 14, color: '#A8CFEE', paddingLeft: 5 },
   expiryDate: { fontSize: 14, fontWeight: '700', color: '#222' },
