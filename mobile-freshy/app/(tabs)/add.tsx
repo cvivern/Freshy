@@ -58,16 +58,9 @@ const ADD_TABS: { key: AddTab; label: string }[] = [
   { key: 'hogares', label: 'Hogares' },
 ];
 
-// ------- Mock Data for Espacios / Hogares -------
-const SPACES = [
-  { id: 1, emoji: '🧊', name: 'Heladera' },
-  { id: 2, emoji: '🗄️', name: 'Alacena' },
-  { id: 3, emoji: '🥶', name: 'Freezer' },
-];
-
-const HOUSEHOLDS = [
-  { id: 1, emoji: '🏠', name: 'Casa de Cata', members: 2 },
-];
+// ------- Types Espacios / Hogares -------
+type Space = { id: number; emoji: string; name: string };
+type Household = { id: number; emoji: string; name: string };
 
 // ------- Main Screen -------
 export default function AddScreen() {
@@ -83,6 +76,21 @@ export default function AddScreen() {
   const [restock, setRestock] = useState<RestockState | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(true);
+  const [spaces, setSpaces] = useState<Space[]>([
+    { id: 1, emoji: '🧊', name: 'Heladera' },
+    { id: 2, emoji: '🗄️', name: 'Alacena' },
+    { id: 3, emoji: '🥶', name: 'Freezer' },
+  ]);
+  const [households, setHouseholds] = useState<Household[]>([
+    { id: 1, emoji: '🏠', name: 'Casa de Cata' },
+  ]);
+  const [spaceModal, setSpaceModal] = useState(false);
+  const [newSpaceName, setNewSpaceName] = useState('');
+  const [newSpaceEmoji, setNewSpaceEmoji] = useState('');
+  const [householdModal, setHouseholdModal] = useState(false);
+  const [newHouseholdName, setNewHouseholdName] = useState('');
+  const [newHouseholdEmoji, setNewHouseholdEmoji] = useState('');
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState<number>(1);
 
   React.useEffect(() => {
     fetchInventoryItems()
@@ -490,9 +498,24 @@ export default function AddScreen() {
         {/* ---- Espacios tab ---- */}
         {activeTab === 'espacios' && (
           <>
-            <Text style={styles.sectionTitle}>Espacios de almacenamiento</Text>
+            <Text style={styles.sectionTitle}>Hogar</Text>
+            <Text style={styles.sectionSubtitle}>¿A qué hogar pertenecen estos espacios?</Text>
+            <View style={styles.householdSelector}>
+              {households.map((hh) => (
+                <TouchableOpacity
+                  key={hh.id}
+                  style={[styles.householdChip, selectedHouseholdId === hh.id && styles.householdChipActive]}
+                  onPress={() => setSelectedHouseholdId(hh.id)}
+                >
+                  <Text style={styles.householdChipEmoji}>{hh.emoji}</Text>
+                  <Text style={[styles.householdChipText, selectedHouseholdId === hh.id && styles.householdChipTextActive]}>{hh.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Espacios de almacenamiento</Text>
             <Text style={styles.sectionSubtitle}>Organizá tus productos por área del hogar.</Text>
-            {SPACES.map((space) => (
+            {spaces.map((space) => (
               <View key={space.id} style={styles.categoryCard}>
                 <View style={[styles.categoryIconWrap, { backgroundColor: '#E8F4FF' }]}>
                   <Text style={styles.categoryEmoji}>{space.emoji}</Text>
@@ -500,9 +523,19 @@ export default function AddScreen() {
                 <View style={styles.categoryInfo}>
                   <Text style={styles.categoryTitle}>{space.name}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#CCC" />
+                <TouchableOpacity onPress={() => Alert.alert('Eliminar espacio', `¿Querés eliminar "${space.name}"?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Eliminar', style: 'destructive', onPress: () => setSpaces((p) => p.filter((s) => s.id !== space.id)) }])}>
+                  <Ionicons name="trash-outline" size={20} color="#E07070" />
+                </TouchableOpacity>
               </View>
             ))}
+            <TouchableOpacity style={styles.categoryCard} onPress={() => { setNewSpaceName(''); setNewSpaceEmoji(''); setSpaceModal(true); }} activeOpacity={0.8}>
+              <View style={[styles.categoryIconWrap, { backgroundColor: '#DFF5E3' }]}>
+                <Ionicons name="add" size={26} color="#27AE60" />
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryTitle}>Agregar espacio</Text>
+              </View>
+            </TouchableOpacity>
           </>
         )}
 
@@ -511,18 +544,27 @@ export default function AddScreen() {
           <>
             <Text style={styles.sectionTitle}>Mis hogares</Text>
             <Text style={styles.sectionSubtitle}>Gestioná los hogares en los que participás.</Text>
-            {HOUSEHOLDS.map((hh) => (
+            {households.map((hh) => (
               <View key={hh.id} style={styles.categoryCard}>
                 <View style={[styles.categoryIconWrap, { backgroundColor: '#F0F0F0' }]}>
                   <Text style={styles.categoryEmoji}>{hh.emoji}</Text>
                 </View>
                 <View style={styles.categoryInfo}>
                   <Text style={styles.categoryTitle}>{hh.name}</Text>
-                  <Text style={styles.categorySubtitle}>{hh.members} miembros</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={20} color="#CCC" />
+                <TouchableOpacity onPress={() => Alert.alert('Eliminar hogar', `¿Querés eliminar "${hh.name}"?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Eliminar', style: 'destructive', onPress: () => setHouseholds((p) => p.filter((h) => h.id !== hh.id)) }])}>
+                  <Ionicons name="trash-outline" size={20} color="#E07070" />
+                </TouchableOpacity>
               </View>
             ))}
+            <TouchableOpacity style={styles.categoryCard} onPress={() => { setNewHouseholdName(''); setNewHouseholdEmoji(''); setHouseholdModal(true); }} activeOpacity={0.8}>
+              <View style={[styles.categoryIconWrap, { backgroundColor: '#DFF5E3' }]}>
+                <Ionicons name="add" size={26} color="#27AE60" />
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryTitle}>Agregar hogar</Text>
+              </View>
+            </TouchableOpacity>
           </>
         )}
 
@@ -624,6 +666,64 @@ export default function AddScreen() {
                   );
                 })()
               )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal agregar espacio */}
+      <Modal visible={spaceModal} transparent animationType="slide" onRequestClose={() => setSpaceModal(false)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Nuevo espacio</Text>
+            <Text style={styles.fieldLabel}>Emoji</Text>
+            <TextInput style={styles.input} value={newSpaceEmoji} onChangeText={setNewSpaceEmoji} placeholder="🧊" placeholderTextColor="#BBB" autoFocus />
+            <Text style={styles.fieldLabel}>Nombre</Text>
+            <TextInput style={styles.input} value={newSpaceName} onChangeText={setNewSpaceName} placeholder="Ej: Freezer" placeholderTextColor="#BBB" />
+            <View style={styles.btnRow}>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setSpaceModal(false)}>
+                <Text style={styles.secondaryBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryBtn, styles.btnFlex, !newSpaceName.trim() && styles.btnDisabled]}
+                disabled={!newSpaceName.trim()}
+                onPress={() => {
+                  setSpaces((p) => [...p, { id: Date.now(), emoji: newSpaceEmoji || '📦', name: newSpaceName.trim() }]);
+                  setSpaceModal(false);
+                }}
+              >
+                <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                <Text style={styles.primaryBtnText}>Agregar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal agregar hogar */}
+      <Modal visible={householdModal} transparent animationType="slide" onRequestClose={() => setHouseholdModal(false)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Nuevo hogar</Text>
+            <Text style={styles.fieldLabel}>Emoji</Text>
+            <TextInput style={styles.input} value={newHouseholdEmoji} onChangeText={setNewHouseholdEmoji} placeholder="🏠" placeholderTextColor="#BBB" autoFocus />
+            <Text style={styles.fieldLabel}>Nombre</Text>
+            <TextInput style={styles.input} value={newHouseholdName} onChangeText={setNewHouseholdName} placeholder="Ej: Casa de verano" placeholderTextColor="#BBB" />
+            <View style={styles.btnRow}>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setHouseholdModal(false)}>
+                <Text style={styles.secondaryBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryBtn, styles.btnFlex, !newHouseholdName.trim() && styles.btnDisabled]}
+                disabled={!newHouseholdName.trim()}
+                onPress={() => {
+                  setHouseholds((p) => [...p, { id: Date.now(), emoji: newHouseholdEmoji || '🏠', name: newHouseholdName.trim() }]);
+                  setHouseholdModal(false);
+                }}
+              >
+                <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                <Text style={styles.primaryBtnText}>Agregar</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -863,6 +963,12 @@ const styles = StyleSheet.create({
   productEmoji: { fontSize: 32, marginRight: 16 },
   productName: { flex: 1, fontSize: 18, fontWeight: '500', color: '#222' },
   btnDisabled: { backgroundColor: '#C8E3F5', opacity: 0.6 },
+  householdSelector: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  householdChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderColor: '#CCC', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#fff' },
+  householdChipActive: { backgroundColor: '#A8CFEE', borderColor: '#A8CFEE' },
+  householdChipEmoji: { fontSize: 16 },
+  householdChipText: { fontSize: 14, color: '#555', fontWeight: '500' },
+  householdChipTextActive: { color: '#fff', fontWeight: '700' },
   addButton: {
     width: 36,
     height: 36,
