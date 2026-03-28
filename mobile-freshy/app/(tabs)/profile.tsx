@@ -21,8 +21,17 @@ import {
   fetchInventoryItems,
   updateProfile,
   addHouseholdMember,
+  fetchCameras,
+  fetchStorageAreas,
+  fetchHouseholds,
+  createCamera,
+  updateCamera,
+  deleteCamera,
   type UserProfile,
   type ProfileMember,
+  type Camera,
+  type StorageArea,
+  type Household,
 } from '@/services/api';
 import { apiChangePassword } from '@/services/auth';
 import { useAuth } from '@/contexts/AuthContext';
@@ -288,6 +297,82 @@ function AddMemberModal({
   );
 }
 
+// ------- Camera Modal -------
+function CameraModal({
+  visible, onClose, onSave, storageAreas, initial,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (name: string, storageAreaId: string, isActive: boolean) => Promise<void>;
+  storageAreas: StorageArea[];
+  initial?: Camera | null;
+}) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [selectedArea, setSelectedArea] = useState(initial?.storage_area_id ?? '');
+  const [isActive, setIsActive] = useState(initial?.is_active ?? true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setName(initial?.name ?? '');
+      setSelectedArea(initial?.storage_area_id ?? storageAreas[0]?.id ?? '');
+      setIsActive(initial?.is_active ?? true);
+    }
+  }, [visible]);
+
+  async function handleSave() {
+    if (!name.trim() || !selectedArea) {
+      Alert.alert('Error', 'Completá nombre y elegí un espacio.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(name.trim(), selectedArea, isActive);
+      onClose();
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'No se pudo guardar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{initial ? 'Editar cámara' : 'Agregar cámara'}</Text>
+            <TouchableOpacity onPress={onClose}><Ionicons name="close" size={22} color="#888" /></TouchableOpacity>
+          </View>
+          <Text style={styles.inputLabel}>Nombre</Text>
+          <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Ej: Cámara heladera" placeholderTextColor="#BBB" />
+          <Text style={styles.inputLabel}>Espacio</Text>
+          <View style={styles.areaList}>
+            {storageAreas.map(area => (
+              <TouchableOpacity
+                key={area.id}
+                style={[styles.areaChip, selectedArea === area.id && styles.areaChipActive]}
+                onPress={() => setSelectedArea(area.id)}
+              >
+                <Text style={[styles.areaChipText, selectedArea === area.id && styles.areaChipTextActive]}>
+                  {area.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={styles.switchRow}>
+            <Text style={styles.inputLabel}>Cámara activa (para el monitor)</Text>
+            <Switch value={isActive} onValueChange={setIsActive} trackColor={{ false: '#DDD', true: '#A8CFEE' }} thumbColor="#fff" />
+          </View>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Guardar</Text>}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 // ------- Main Screen -------
 export default function ProfileScreen() {
   const router = useRouter();
@@ -300,6 +385,12 @@ export default function ProfileScreen() {
   const [addMemberVisible, setAddMemberVisible] = useState(false);
   const [notifVencimiento, setNotifVencimiento] = useState(true);
   const [notifSemanal, setNotifSemanal] = useState(false);
+  const [cameras, setCameras] = useState<Camera[]>([]);
+  const [addCamVisible, setAddCamVisible] = useState(false);
+  const [editCamVisible, setEditCamVisible] = useState(false);
+  const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
+  const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
+  const [households, setHouseholds] = useState<Household[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -307,6 +398,16 @@ export default function ProfileScreen() {
     fetchProfile(user.user_id).then(data => {
       setProfile(data);
       setLoadingProfile(false);
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchCameras(user.user_id).then(setCameras);
+    fetchHouseholds(user.user_id).then(async (hh) => {
+      setHouseholds(hh);
+      const areaArrays = await Promise.all(hh.map(h => fetchStorageAreas(h.id)));
+      setStorageAreas(areaArrays.flat());
     });
   }, [user]);
 
@@ -331,6 +432,36 @@ export default function ProfileScreen() {
     } else {
       await cancelWeeklySummary().catch(() => {});
     }
+  }
+
+  async function handleAddCamera(name: string, storageAreaId: string) {
+    if (!user) return;
+    const cam = await createCamera({
+      name,
+      storage_area_id: storageAreaId,
+      user_id: user.user_id,
+      is_active: cameras.length === 0, // first camera is active by default
+    });
+    setCameras(prev => [...prev, cam]);
+  }
+
+  async function handleEditCamera(cameraId: string, name: string, storageAreaId: string, isActive: boolean) {
+    const updated = await updateCamera(cameraId, { name, storage_area_id: storageAreaId, is_active: isActive });
+    setCameras(prev => prev.map(c => {
+      if (isActive && c.id !== cameraId) return { ...c, is_active: false };
+      if (c.id === cameraId) return { ...c, ...updated };
+      return c;
+    }));
+  }
+
+  async function handleDeleteCamera(cameraId: string) {
+    Alert.alert('Eliminar cámara', '¿Seguro?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => {
+        await deleteCamera(cameraId);
+        setCameras(prev => prev.filter(c => c.id !== cameraId));
+      }},
+    ]);
   }
 
   async function handleLogout() {
@@ -398,6 +529,48 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.addBtn} onPress={() => setAddMemberVisible(true)}>
             <Ionicons name="person-add-outline" size={16} color="#A8CFEE" />
             <Text style={styles.addBtnText}>Invitar miembro</Text>
+          </TouchableOpacity>
+        </SectionCard>
+
+        {/* Cámaras */}
+        <Text style={styles.sectionTitle}>Cámaras</Text>
+        <SectionCard>
+          {cameras.length === 0 && (
+            <Text style={{ color: '#BBB', padding: 16, fontSize: 14 }}>No tenés cámaras configuradas.</Text>
+          )}
+          {cameras.map((cam, idx) => (
+            <View key={cam.id}>
+              <View style={styles.cameraRow}>
+                <View style={[styles.cameraIconWrap, { backgroundColor: cam.is_active ? '#E8F4FF' : '#F5F5F5' }]}>
+                  <Ionicons name="videocam-outline" size={20} color={cam.is_active ? '#5B9BD5' : '#BBB'} />
+                </View>
+                <View style={styles.cameraInfo}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.cameraName}>{cam.name}</Text>
+                    {cam.is_active && (
+                      <View style={styles.activeBadge}><Text style={styles.activeBadgeText}>activa</Text></View>
+                    )}
+                  </View>
+                  <Text style={styles.cameraArea}>
+                    🏠 {cam.storage_areas?.households?.name ?? '—'} · 📦 {cam.storage_areas?.name ?? '—'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity onPress={() => { setEditingCamera(cam); setEditCamVisible(true); }}>
+                    <Ionicons name="pencil-outline" size={18} color="#A8CFEE" />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDeleteCamera(cam.id)}>
+                    <Ionicons name="trash-outline" size={18} color="#E07070" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {idx < cameras.length - 1 && <View style={styles.divider} />}
+            </View>
+          ))}
+          <View style={styles.divider} />
+          <TouchableOpacity style={styles.addBtn} onPress={() => setAddCamVisible(true)}>
+            <Ionicons name="add-circle-outline" size={16} color="#A8CFEE" />
+            <Text style={styles.addBtnText}>Agregar cámara</Text>
           </TouchableOpacity>
         </SectionCard>
 
@@ -476,6 +649,22 @@ export default function ProfileScreen() {
         visible={addMemberVisible}
         onClose={() => setAddMemberVisible(false)}
         onAdd={handleAddMember}
+      />
+
+      <CameraModal
+        visible={addCamVisible}
+        onClose={() => setAddCamVisible(false)}
+        storageAreas={storageAreas}
+        onSave={async (name, areaId, isActive) => { await handleAddCamera(name, areaId); }}
+      />
+      <CameraModal
+        visible={editCamVisible}
+        onClose={() => { setEditCamVisible(false); setEditingCamera(null); }}
+        storageAreas={storageAreas}
+        initial={editingCamera}
+        onSave={async (name, areaId, isActive) => {
+          if (editingCamera) await handleEditCamera(editingCamera.id, name, areaId, isActive);
+        }}
       />
     </View>
   );
@@ -597,4 +786,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  // Camera section
+  cameraRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  cameraIconWrap: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  cameraInfo: { flex: 1 },
+  cameraName: { fontSize: 15, fontWeight: '600', color: '#1A1A1A' },
+  cameraArea: { fontSize: 12, color: '#999', marginTop: 2 },
+  activeBadge: { backgroundColor: '#E8F4FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  activeBadgeText: { fontSize: 11, fontWeight: '700', color: '#5B9BD5' },
+  areaList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  areaChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#F0F0F0' },
+  areaChipActive: { backgroundColor: '#A8CFEE' },
+  areaChipText: { fontSize: 13, fontWeight: '600', color: '#888' },
+  areaChipTextActive: { color: '#fff' },
+  switchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
 });

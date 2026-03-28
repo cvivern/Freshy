@@ -387,3 +387,56 @@ export async function addHouseholdMember(userId: string, email: string, token?: 
   }
   return response.json();
 }
+
+// ------- Cameras -------
+
+export type Camera = {
+  id: string;
+  name: string;
+  storage_area_id: string;
+  device_identifier: string;
+  is_active: boolean;
+  last_scan_at: string | null;
+  created_at: string;
+  user_id: string;
+  storage_areas?: {
+    id: string;
+    name: string;
+    household_id: string;
+    households?: { id: string; name: string };
+  };
+};
+
+export async function fetchCameras(userId: string): Promise<Camera[]> {
+  const res = await fetchWithTimeout(`${API_BASE}/api/v1/cameras/?user_id=${userId}`, {});
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createCamera(data: {
+  name: string;
+  storage_area_id: string;
+  user_id: string;
+  device_identifier?: string;
+  is_active?: boolean;
+}): Promise<Camera> {
+  const res = await fetchWithTimeout(`${API_BASE}/api/v1/cameras/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function updateCamera(cameraId: string, data: Partial<Camera>): Promise<Camera> {
+  const res = await fetchWithTimeout(`${API_BASE}/api/v1/cameras/${cameraId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json();
+}
+
+export async function deleteCamera(cameraId: string): Promise<void> {
+  await fetchWithTimeout(`${API_BASE}/api/v1/cameras/${cameraId}`, { method: 'DELETE' });
+}

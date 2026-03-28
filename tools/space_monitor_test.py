@@ -30,10 +30,33 @@ from datetime import datetime
 # ── Configuración ──────────────────────────────────────────────────────────────
 OPENAI_API_KEY = "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"
 
-# URL del backend (local o Vercel). Si está corriendo local: http://localhost:8000
-BACKEND_URL      = "https://backend-freshy.vercel.app"
-# ID del área a monitorear (dejalo vacío para no usar inventario)
-STORAGE_AREA_ID  = ""   # ej: "uuid-del-area"
+# URL del backend
+BACKEND_URL = "https://backend-freshy.vercel.app"
+
+# Usuario activo (el mismo que está logueado en la app)
+MONITOR_USER_ID = "00000000-0000-0000-0000-000000000101"  # cambiar por el user_id real
+
+# Se auto-completa al inicio consultando la cámara activa del usuario
+STORAGE_AREA_ID = ""
+
+
+def fetch_active_camera_area() -> str:
+    """Fetches the storage_area_id of the active camera for MONITOR_USER_ID."""
+    import urllib.request
+    url = f"{BACKEND_URL}/api/v1/cameras/active?user_id={MONITOR_USER_ID}"
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read().decode())
+            area_id = data.get("storage_area_id", "")
+            area_name = data.get("storage_areas", {}).get("name", "?") if data.get("storage_areas") else "?"
+            cam_name  = data.get("name", "?")
+            print(f"📷  Cámara activa: {cam_name}  →  área: {area_name}  ({area_id})")
+            return area_id
+    except Exception as e:
+        print(f"⚠️  No se pudo obtener la cámara activa: {e}")
+        print("   Configurá una cámara en la app → Perfil → Cámaras")
+        return ""
 
 MOTION_THRESHOLD   = 1500   # píxeles en movimiento para disparar detección
 MOTION_COOLDOWN    = 2.0    # segundos de quietud antes de capturar "después"
@@ -215,6 +238,9 @@ def draw_overlay(frame: np.ndarray, state: dict) -> np.ndarray:
 
 
 def main():
+    global STORAGE_AREA_ID
+    STORAGE_AREA_ID = fetch_active_camera_area()
+
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
         print("❌  No se pudo abrir la cámara. Probá cambiando CAMERA_INDEX.")
