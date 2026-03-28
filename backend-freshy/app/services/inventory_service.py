@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -50,17 +51,25 @@ class InventoryService:
     @staticmethod
     def _map_row(row: dict) -> InventoryItemResponse:
         catalog = row.get("catalog_items") or {}
+        logs: list[dict] = row.get("history_logs") or []
+
+        last_used: datetime | None = None
+        if logs:
+            timestamps = [
+                datetime.fromisoformat(log["created_at"])
+                for log in logs
+                if log.get("created_at")
+            ]
+            last_used = max(timestamps) if timestamps else None
 
         return InventoryItemResponse(
             id=row["id"],
             nombre=catalog.get("name", ""),
             marca=catalog.get("marca"),
             emoji=catalog.get("emoji"),
-            foto=None,  # foto_url not present in inventory table
+            foto=row.get("foto_url") or catalog.get("image_url"),
             categoria=catalog.get("category"),
-            # DB uses expiry_date / freshness_state; API surface keeps Spanish names.
-            fecha_vencimiento=row.get("expiry_date"),
-            estado=row.get("freshness_state", "fresco"),
-            # history_logs has no FK to inventory in the current schema.
-            last_used=None,
+            fecha_vencimiento=row.get("fecha_vencimiento"),
+            estado=row.get("estado", "fresco"),
+            last_used=last_used,
         )
