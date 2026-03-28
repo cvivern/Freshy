@@ -13,46 +13,45 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { apiRegister } from '@/services/auth';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function LoginScreen() {
+export default function RegisterScreen() {
   const router = useRouter();
-  const { login, loginDemo } = useAuth();
+  const { login } = useAuth();
 
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loadingDemo, setLoadingDemo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleLogin() {
-    if (!email.trim() || !password) {
-      setError('Completá tu email y contraseña.');
+  async function handleRegister() {
+    if (!name.trim() || !email.trim() || !password || !confirmPassword) {
+      setError('Completá todos los campos.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
     setError(null);
     setLoading(true);
     try {
+      await apiRegister(name.trim(), email.trim().toLowerCase(), password);
       await login(email.trim().toLowerCase(), password);
       router.replace('/(tabs)');
     } catch (e: any) {
-      setError((e.message ?? 'No se pudo iniciar sesión.') + '\n\nUsá el modo demo para probar la app.');
+      setError(e.message ?? 'No se pudo crear la cuenta.');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function handleDemo() {
-    setError(null);
-    setLoadingDemo(true);
-    try {
-      await loginDemo();
-      router.replace('/(tabs)');
-    } catch (e: any) {
-      setError(e.message ?? 'No se pudo entrar en modo demo.');
-    } finally {
-      setLoadingDemo(false);
     }
   }
 
@@ -75,7 +74,7 @@ export default function LoginScreen() {
 
         {/* Card */}
         <View style={styles.card}>
-          <Text style={styles.title}>Iniciar sesión</Text>
+          <Text style={styles.title}>Crear cuenta</Text>
 
           {error && (
             <View style={styles.errorBox}>
@@ -83,6 +82,17 @@ export default function LoginScreen() {
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
+
+          <Text style={styles.label}>Nombre</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="Tu nombre"
+            placeholderTextColor="#BBB"
+            autoCapitalize="words"
+            autoCorrect={false}
+          />
 
           <Text style={styles.label}>Email</Text>
           <TextInput
@@ -112,38 +122,36 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
+          <Text style={styles.label}>Confirmar contraseña</Text>
+          <View style={styles.passwordRow}>
+            <TextInput
+              style={[styles.input, styles.passwordInput, { marginBottom: 24 }]}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="••••••••"
+              placeholderTextColor="#BBB"
+              secureTextEntry={!showConfirm}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowConfirm(v => !v)}>
+              <Ionicons name={showConfirm ? 'eye-off-outline' : 'eye-outline'} size={20} color="#AAA" />
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
-            style={[styles.loginBtn, loading && styles.loginBtnDisabled]}
-            onPress={handleLogin}
-            disabled={loading || loadingDemo}
+            style={[styles.registerBtn, loading && styles.btnDisabled]}
+            onPress={handleRegister}
+            disabled={loading}
             activeOpacity={0.8}
           >
             {loading
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.loginBtnText}>Entrar</Text>
+              : <Text style={styles.registerBtnText}>Crear cuenta</Text>
             }
           </TouchableOpacity>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>o</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.demoBtn, loadingDemo && styles.loginBtnDisabled]}
-            onPress={handleDemo}
-            disabled={loading || loadingDemo}
-            activeOpacity={0.8}
-          >
-            {loadingDemo
-              ? <ActivityIndicator color="#A8CFEE" />
-              : <Text style={styles.demoBtnText}>Continuar en modo demo</Text>
-            }
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.registerRow} onPress={() => router.push('/register')}>
-            <Text style={styles.registerText}>¿No tenés cuenta? <Text style={styles.registerLink}>Creá una</Text></Text>
+          <TouchableOpacity style={styles.backRow} onPress={() => router.back()}>
+            <Text style={styles.backText}>¿Ya tenés cuenta? <Text style={styles.backLink}>Iniciá sesión</Text></Text>
           </TouchableOpacity>
         </View>
 
@@ -196,34 +204,22 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   passwordRow: { position: 'relative' },
-  passwordInput: { paddingRight: 48, marginBottom: 24 },
+  passwordInput: { paddingRight: 48 },
   eyeBtn: { position: 'absolute', right: 14, top: 12 },
 
-  loginBtn: {
+  registerBtn: {
     backgroundColor: '#A8CFEE',
     borderRadius: 12,
     paddingVertical: 15,
     alignItems: 'center',
+    marginBottom: 16,
   },
-  loginBtnDisabled: { opacity: 0.6 },
-  loginBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  btnDisabled: { opacity: 0.6 },
+  registerBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 16, gap: 10 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#EEE' },
-  dividerText: { fontSize: 13, color: '#BBB' },
-
-  demoBtn: {
-    borderWidth: 1.5,
-    borderColor: '#A8CFEE',
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-  },
-  demoBtnText: { color: '#A8CFEE', fontSize: 15, fontWeight: '600' },
-
-  registerRow: { alignItems: 'center', marginTop: 16 },
-  registerText: { fontSize: 13, color: '#888' },
-  registerLink: { color: '#A8CFEE', fontWeight: '700' },
+  backRow: { alignItems: 'center' },
+  backText: { fontSize: 13, color: '#888' },
+  backLink: { color: '#A8CFEE', fontWeight: '700' },
 
   footer: { textAlign: 'center', color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 32 },
 });

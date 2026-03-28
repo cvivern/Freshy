@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { apiLogin, clearSession, demoLogin, loadSession, saveSession, type Session } from '@/services/auth';
+import { apiLogin, clearSession, loadSession, saveSession, type Session } from '@/services/auth';
 
 type AuthContextType = {
   user: Session | null;
@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function loginDemo() {
-    const session = demoLogin();
+    const session = await apiLogin('slezamaorihuela@itba.edu.ar', '123123');
     await saveSession(session);
     setUser(session);
   }
