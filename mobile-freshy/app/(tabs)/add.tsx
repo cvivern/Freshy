@@ -69,26 +69,6 @@ const HOUSEHOLDS = [
   { id: 1, emoji: '🏠', name: 'Casa de Cata', members: 2 },
 ];
 
-// ------- Tab types -------
-type AddTab = 'productos' | 'espacios' | 'hogares';
-
-const ADD_TABS: { key: AddTab; label: string }[] = [
-  { key: 'productos', label: 'Productos' },
-  { key: 'espacios', label: 'Espacios' },
-  { key: 'hogares', label: 'Hogares' },
-];
-
-// ------- Mock Data for Espacios / Hogares -------
-const SPACES = [
-  { id: 1, emoji: '🧊', name: 'Heladera' },
-  { id: 2, emoji: '🗄️', name: 'Alacena' },
-  { id: 3, emoji: '🥶', name: 'Freezer' },
-];
-
-const HOUSEHOLDS = [
-  { id: 1, emoji: '🏠', name: 'Casa de Cata', members: 2 },
-];
-
 // ------- Main Screen -------
 export default function AddScreen() {
   const cameraRef = useRef<CameraView>(null);
