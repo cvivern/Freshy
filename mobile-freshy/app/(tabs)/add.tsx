@@ -211,7 +211,6 @@ export default function AddScreen() {
             })
           )
         );
-        Alert.alert('¡Restock guardado!', `${total} ${restock.product.nombre} agregados al inventario.`);
         setRestock(null);
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Error desconocido';
@@ -473,16 +472,16 @@ export default function AddScreen() {
               </Text>
             ) : (
               inventoryItems.map((product) => (
-                <View key={product.id} style={styles.productRow}>
-                  <Text style={styles.productEmoji}>{product.emoji ?? '📦'}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.productName}>{product.nombre}</Text>
-                    {product.marca ? <Text style={{ color: '#AAA', fontSize: 12 }}>{product.marca}</Text> : null}
+                <TouchableOpacity key={product.id} style={styles.categoryCard} onPress={() => openRestock(product)} activeOpacity={0.8}>
+                  <View style={[styles.categoryIconWrap, { backgroundColor: '#E8F4FF' }]}>
+                    <Text style={styles.categoryEmoji}>{product.emoji ?? '📦'}</Text>
                   </View>
-                  <TouchableOpacity style={styles.addButton} onPress={() => openRestock(product)}>
-                    <Ionicons name="add" size={22} color="#fff" />
-                  </TouchableOpacity>
-                </View>
+                  <View style={styles.categoryInfo}>
+                    <Text style={styles.categoryTitle}>{product.nombre}</Text>
+                    <Text style={styles.categorySubtitle}>{product.marca ?? 'Tocá para hacer restock'}</Text>
+                  </View>
+                  <Ionicons name="add-circle-outline" size={26} color="#A8CFEE" />
+                </TouchableOpacity>
               ))
             )}
           </>
@@ -574,7 +573,13 @@ export default function AddScreen() {
                 <TextInput
                   style={styles.input}
                   value={restock.currentDate}
-                  onChangeText={(v) => setRestock((p) => p ? { ...p, currentDate: v } : p)}
+                  onChangeText={(raw) => {
+                    const digits = raw.replace(/\D/g, '').slice(0, 8);
+                    let formatted = digits;
+                    if (digits.length > 4) formatted = `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
+                    else if (digits.length > 2) formatted = `${digits.slice(0,2)}/${digits.slice(2)}`;
+                    setRestock((p) => p ? { ...p, currentDate: formatted } : p);
+                  }}
                   placeholder="DD/MM/AAAA"
                   placeholderTextColor="#BBB"
                   keyboardType="numeric"
@@ -601,12 +606,23 @@ export default function AddScreen() {
                   <Ionicons name="arrow-forward" size={18} color="#fff" />
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handleRestockDateNext}>
-                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                  <Text style={styles.primaryBtnText}>
-                    {restock && restock.dates.length + 1 >= parseInt(restock.qty, 10) ? 'Guardar' : 'Siguiente'}
-                  </Text>
-                </TouchableOpacity>
+                (() => {
+                  const _d = restock?.currentDate ?? '';
+                  const _m = _d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                  const isValidDate = !!_m && +_m[2] >= 1 && +_m[2] <= 12 && +_m[1] >= 1 && +_m[1] <= 31 && +_m[3] >= 2000;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.primaryBtn, styles.btnFlex, !isValidDate && styles.btnDisabled]}
+                      onPress={handleRestockDateNext}
+                      disabled={!isValidDate}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                      <Text style={styles.primaryBtnText}>
+                        {restock && restock.dates.length + 1 >= parseInt(restock.qty, 10) ? 'Guardar' : 'Siguiente'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })()
               )}
             </View>
           </View>
@@ -846,6 +862,7 @@ const styles = StyleSheet.create({
   },
   productEmoji: { fontSize: 32, marginRight: 16 },
   productName: { flex: 1, fontSize: 18, fontWeight: '500', color: '#222' },
+  btnDisabled: { backgroundColor: '#C8E3F5', opacity: 0.6 },
   addButton: {
     width: 36,
     height: 36,
