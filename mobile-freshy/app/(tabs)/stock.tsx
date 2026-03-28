@@ -7,6 +7,7 @@ import {
   Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppHeader from '@/components/AppHeader';
 
 // ------- Types -------
 type StockItem = {
@@ -126,9 +127,7 @@ export default function StockScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>freshy</Text>
-      </View>
+      <AppHeader />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>Resumen del hogar</Text>
@@ -169,13 +168,6 @@ export default function StockScreen() {
 // ------- Styles -------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  header: {
-    backgroundColor: '#D4827A',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: { color: '#fff', fontSize: 28, fontWeight: '800', fontStyle: 'italic' },
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 14, marginTop: 4 },

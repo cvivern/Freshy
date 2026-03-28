@@ -33,6 +33,9 @@ type Phase =
   | 'detecting_barcode'  // procesando segunda foto (vision AI lee barcode+fecha)
   | 'barcode_popup';     // popup con datos leídos (editables) → guardar
 
+type AddTab = 'productos' | 'espacios' | 'hogares';
+type Space = { id: number; emoji: string; name: string };
+type Household = { id: number; name: string };
 type Detection = { label: string; confidence: number };
 type ProductInfo = { category: string; brand: string; name: string };
 type BarcodeInfo = { barcode: string; expiryDate: string };
@@ -128,6 +131,16 @@ const FAVORITE_PRODUCTS: FavoriteProduct[] = [
   { id: 3, emoji: '🍌', name: 'Banana' },
 ];
 
+const INITIAL_SPACES: Space[] = [
+  { id: 1, emoji: '🧊', name: 'Heladera' },
+  { id: 2, emoji: '🗄️', name: 'Alacena' },
+  { id: 3, emoji: '❄️', name: 'Congelados' },
+];
+
+const INITIAL_HOUSEHOLDS: Household[] = [
+  { id: 1, name: 'Casa de Cata' },
+];
+
 // ------- Main Screen -------
 export default function AddScreen() {
   const cameraRef = useRef<CameraView>(null);
@@ -139,6 +152,11 @@ export default function AddScreen() {
   const [productInfo, setProductInfo] = useState<ProductInfo>({ category: '', brand: '', name: '' });
   const [barcodeInfo, setBarcodeInfo] = useState<BarcodeInfo>({ barcode: '', expiryDate: '' });
   const [restock, setRestock] = useState<RestockState | null>(null);
+  const [addTab, setAddTab] = useState<AddTab>('productos');
+  const [spaces, setSpaces] = useState<Space[]>(INITIAL_SPACES);
+  const [households, setHouseholds] = useState<Household[]>(INITIAL_HOUSEHOLDS);
+  const [spaceModal, setSpaceModal] = useState<{ name: string; emoji: string } | null>(null);
+  const [householdModal, setHouseholdModal] = useState<{ name: string } | null>(null);
 
   function selectCategory(cat: ProductCategory) {
     setCategory(cat);
@@ -426,57 +444,206 @@ export default function AddScreen() {
     );
   }
 
+  function handleAddSpace() {
+    if (!spaceModal) return;
+    if (!spaceModal.name.trim()) { Alert.alert('Nombre requerido', 'Ingresá un nombre para el espacio.'); return; }
+    setSpaces((prev) => [...prev, { id: Date.now(), emoji: spaceModal.emoji.trim() || '📦', name: spaceModal.name.trim() }]);
+    setSpaceModal(null);
+  }
+
+  function handleAddHousehold() {
+    if (!householdModal) return;
+    if (!householdModal.name.trim()) { Alert.alert('Nombre requerido', 'Ingresá un nombre para el hogar.'); return; }
+    setHouseholds((prev) => [...prev, { id: Date.now(), name: householdModal.name.trim() }]);
+    setHouseholdModal(null);
+  }
+
   // ================================================================
   // SELECT TYPE (pantalla principal)
   // ================================================================
   return (
     <View style={styles.container}>
       <AppHeader />
+
+      {/* Tab bar */}
+      <View style={styles.tabBar}>
+        {(['productos', 'espacios', 'hogares'] as AddTab[]).map((t) => (
+          <TouchableOpacity
+            key={t}
+            style={[styles.tabBtn, addTab === t && styles.tabBtnActive]}
+            onPress={() => setAddTab(t)}
+            activeOpacity={0.75}
+          >
+            <Text style={[styles.tabBtnText, addTab === t && styles.tabBtnTextActive]}>
+              {t === 'productos' ? 'Productos' : t === 'espacios' ? 'Espacios' : 'Hogares'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-        <Text style={styles.sectionTitle}>¿Qué vas a agregar?</Text>
-        <Text style={styles.sectionSubtitle}>Elegí el tipo de producto para que la IA use el análisis correcto.</Text>
+        {/* ── TAB: PRODUCTOS ── */}
+        {addTab === 'productos' && (
+          <>
+            <Text style={styles.sectionTitle}>¿Qué vas a agregar?</Text>
+            <Text style={styles.sectionSubtitle}>Elegí el tipo de producto para que la IA use el análisis correcto.</Text>
 
-        <TouchableOpacity style={styles.categoryCard} onPress={() => selectCategory('fruta_verdura')} activeOpacity={0.8}>
-          <View style={[styles.categoryIconWrap, { backgroundColor: '#DFF5E3' }]}>
-            <Text style={styles.categoryEmoji}>🥦</Text>
-          </View>
-          <View style={styles.categoryInfo}>
-            <Text style={styles.categoryTitle}>Fruta o verdura</Text>
-            <Text style={styles.categorySubtitle}>La IA detecta el tipo y su estado de frescura</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#CCC" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.categoryCard} onPress={() => selectCategory('otro')} activeOpacity={0.8}>
-          <View style={[styles.categoryIconWrap, { backgroundColor: '#E8F4FF' }]}>
-            <Text style={styles.categoryEmoji}>🥫</Text>
-          </View>
-          <View style={styles.categoryInfo}>
-            <Text style={styles.categoryTitle}>Producto envasado</Text>
-            <Text style={styles.categorySubtitle}>Lácteos, enlatados, bebidas, snacks, etc.</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#CCC" />
-        </TouchableOpacity>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>o hace un restock de productos que ya tenias</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <Text style={styles.description}>Tus productos favoritos — agregálos rápido sin escanear.</Text>
-        {FAVORITE_PRODUCTS.map((product) => (
-          <View key={product.id} style={styles.productRow}>
-            <Text style={styles.productEmoji}>{product.emoji}</Text>
-            <Text style={styles.productName}>{product.name}</Text>
-            <TouchableOpacity style={styles.addButton} onPress={() => openRestock(product)}>
-              <Ionicons name="add" size={22} color="#fff" />
+            <TouchableOpacity style={styles.categoryCard} onPress={() => selectCategory('fruta_verdura')} activeOpacity={0.8}>
+              <View style={[styles.categoryIconWrap, { backgroundColor: '#DFF5E3' }]}>
+                <Text style={styles.categoryEmoji}>🥦</Text>
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryTitle}>Fruta o verdura</Text>
+                <Text style={styles.categorySubtitle}>La IA detecta el tipo y su estado de frescura</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#CCC" />
             </TouchableOpacity>
-          </View>
-        ))}
+
+            <TouchableOpacity style={styles.categoryCard} onPress={() => selectCategory('otro')} activeOpacity={0.8}>
+              <View style={[styles.categoryIconWrap, { backgroundColor: '#E8F4FF' }]}>
+                <Text style={styles.categoryEmoji}>🥫</Text>
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryTitle}>Producto envasado</Text>
+                <Text style={styles.categorySubtitle}>Lácteos, enlatados, bebidas, snacks, etc.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#CCC" />
+            </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>o hace un restock de productos que ya tenias</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Text style={styles.description}>Tus productos favoritos — agregálos rápido sin escanear.</Text>
+            {FAVORITE_PRODUCTS.map((product) => (
+              <View key={product.id} style={styles.productRow}>
+                <Text style={styles.productEmoji}>{product.emoji}</Text>
+                <Text style={styles.productName}>{product.name}</Text>
+                <TouchableOpacity style={styles.addButton} onPress={() => openRestock(product)}>
+                  <Ionicons name="add" size={22} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </>
+        )}
+
+        {/* ── TAB: ESPACIOS ── */}
+        {addTab === 'espacios' && (
+          <>
+            <Text style={styles.sectionTitle}>Tus espacios</Text>
+            <Text style={styles.sectionSubtitle}>Los espacios donde guardás tus productos (heladera, alacena, etc.).</Text>
+
+            {spaces.map((s, idx) => (
+              <View key={s.id} style={[styles.listCard, idx === spaces.length - 1 && { marginBottom: 0 }]}>
+                <View style={styles.listCardIcon}>
+                  <Text style={styles.listCardEmoji}>{s.emoji}</Text>
+                </View>
+                <Text style={styles.listCardName}>{s.name}</Text>
+              </View>
+            ))}
+
+            <TouchableOpacity style={styles.outlineBtn} onPress={() => setSpaceModal({ name: '', emoji: '' })} activeOpacity={0.8}>
+              <Ionicons name="add-circle-outline" size={18} color="#4ABCB0" />
+              <Text style={[styles.outlineBtnText, { color: '#4ABCB0' }]}>Agregar espacio</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* ── TAB: HOGARES ── */}
+        {addTab === 'hogares' && (
+          <>
+            <Text style={styles.sectionTitle}>Tus hogares</Text>
+            <Text style={styles.sectionSubtitle}>Podés pertenecer a varios hogares y cambiar entre ellos.</Text>
+
+            {households.map((h, idx) => (
+              <View key={h.id} style={[styles.listCard, idx === households.length - 1 && { marginBottom: 0 }]}>
+                <View style={[styles.listCardIcon, { backgroundColor: '#FAE8E6' }]}>
+                  <Ionicons name="home-outline" size={20} color="#D4827A" />
+                </View>
+                <Text style={styles.listCardName}>{h.name}</Text>
+              </View>
+            ))}
+
+            <TouchableOpacity style={styles.outlineBtn} onPress={() => setHouseholdModal({ name: '' })} activeOpacity={0.8}>
+              <Ionicons name="add-circle-outline" size={18} color="#D4827A" />
+              <Text style={styles.outlineBtnText}>Agregar hogar</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
       </ScrollView>
+
+      {/* Modal agregar espacio */}
+      <Modal visible={!!spaceModal} transparent animationType="slide" onRequestClose={() => setSpaceModal(null)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Nuevo espacio</Text>
+            <View>
+              <Text style={styles.fieldLabel}>Emoji</Text>
+              <TextInput
+                style={styles.input}
+                value={spaceModal?.emoji ?? ''}
+                onChangeText={(v) => setSpaceModal((p) => p ? { ...p, emoji: v } : p)}
+                placeholder="🧊"
+                placeholderTextColor="#BBB"
+                maxLength={2}
+              />
+            </View>
+            <View>
+              <Text style={styles.fieldLabel}>Nombre</Text>
+              <TextInput
+                style={styles.input}
+                value={spaceModal?.name ?? ''}
+                onChangeText={(v) => setSpaceModal((p) => p ? { ...p, name: v } : p)}
+                placeholder="Ej: Heladera"
+                placeholderTextColor="#BBB"
+                autoFocus
+              />
+            </View>
+            <View style={styles.btnRow}>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setSpaceModal(null)}>
+                <Text style={styles.secondaryBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex, { backgroundColor: '#4ABCB0' }]} onPress={handleAddSpace}>
+                <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                <Text style={styles.primaryBtnText}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal agregar hogar */}
+      <Modal visible={!!householdModal} transparent animationType="slide" onRequestClose={() => setHouseholdModal(null)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Nuevo hogar</Text>
+            <View>
+              <Text style={styles.fieldLabel}>Nombre del hogar</Text>
+              <TextInput
+                style={styles.input}
+                value={householdModal?.name ?? ''}
+                onChangeText={(v) => setHouseholdModal((p) => p ? { ...p, name: v } : p)}
+                placeholder="Ej: Casa de la playa"
+                placeholderTextColor="#BBB"
+                autoFocus
+              />
+            </View>
+            <View style={styles.btnRow}>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setHouseholdModal(null)}>
+                <Text style={styles.secondaryBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handleAddHousehold}>
+                <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                <Text style={styles.primaryBtnText}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Modal restock */}
       <Modal visible={!!restock} transparent animationType="slide" onRequestClose={() => setRestock(null)}>
@@ -690,6 +857,64 @@ const styles = StyleSheet.create({
   aiHint: { fontSize: 12, color: '#999', lineHeight: 18 },
   datesIngresadas: { marginTop: 10, gap: 4 },
   dateIngresadaText: { fontSize: 13, color: '#27AE60', fontWeight: '600' },
+
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 22,
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+  },
+  tabBtnActive: { backgroundColor: '#A8CFEE' },
+  tabBtnText: { fontSize: 14, fontWeight: '600', color: '#999' },
+  tabBtnTextActive: { color: '#fff' },
+
+  // List cards (espacios / hogares)
+  listCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#ECECEC',
+    padding: 14,
+    marginBottom: 10,
+  },
+  listCardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#E8F8F7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listCardEmoji: { fontSize: 24 },
+  listCardName: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', flex: 1 },
+
+  // Outline button
+  outlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: '#4ABCB0',
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  outlineBtnText: { fontSize: 15, fontWeight: '700', color: '#D4827A' },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 8 },
   optional: { fontWeight: '400', color: '#AAA' },
   input: {

@@ -8,6 +8,7 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppHeader from '@/components/AppHeader';
 
 // ------- Types -------
 type SettingRowProps = {
@@ -33,12 +34,6 @@ const USER = {
 const HOUSEHOLD_MEMBERS = [
   { name: 'Catalina', emoji: '👩‍🍳', role: 'Admin' },
   { name: 'Marcos', emoji: '👨', role: 'Miembro' },
-];
-
-const SPACES = [
-  { label: 'Heladera', emoji: '🧊' },
-  { label: 'Alacena', emoji: '🗄️' },
-  { label: 'Congelados', emoji: '❄️' },
 ];
 
 // ------- Sub-components -------
@@ -73,9 +68,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>freshy</Text>
-      </View>
+      <AppHeader />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
@@ -131,28 +124,6 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.addBtn}>
             <Ionicons name="person-add-outline" size={16} color="#D4827A" />
             <Text style={styles.addBtnText}>Invitar miembro</Text>
-          </TouchableOpacity>
-        </SectionCard>
-
-        {/* Espacios */}
-        <Text style={styles.sectionTitle}>Espacios</Text>
-        <SectionCard>
-          {SPACES.map((s, idx) => (
-            <View key={s.label}>
-              <SettingRow
-                iconName="cube-outline"
-                iconColor="#4ABCB0"
-                iconBg="#E8F8F7"
-                label={s.label}
-                right={<Text style={styles.spaceEmoji}>{s.emoji}</Text>}
-              />
-              {idx < SPACES.length - 1 && <View style={styles.divider} />}
-            </View>
-          ))}
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.addBtn}>
-            <Ionicons name="add-circle-outline" size={16} color="#4ABCB0" />
-            <Text style={[styles.addBtnText, { color: '#4ABCB0' }]}>Agregar espacio</Text>
           </TouchableOpacity>
         </SectionCard>
 
@@ -226,13 +197,6 @@ export default function ProfileScreen() {
 // ------- Styles -------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F5' },
-  header: {
-    backgroundColor: '#D4827A',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: { color: '#fff', fontSize: 28, fontWeight: '800', fontStyle: 'italic' },
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 48 },
 
@@ -318,8 +282,6 @@ const styles = StyleSheet.create({
 
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 13 },
   addBtnText: { fontSize: 14, fontWeight: '600', color: '#D4827A' },
-
-  spaceEmoji: { fontSize: 22 },
 
   logoutBtn: {
     flexDirection: 'row',
