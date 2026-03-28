@@ -8,6 +8,11 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppHeader from '@/components/AppHeader';
+
+// ------- Config -------
+const USER_ID = 'mock-user-id';           // TODO: reemplazar con auth real
+const STORAGE_AREA_ID = 'mock-area-id';   // TODO: reemplazar con espacio real
 
 // ------- Types -------
 type StockItem = {
@@ -15,11 +20,37 @@ type StockItem = {
   emoji: string;
   name: string;
   brand: string;
-  space: string;       // category used as space chip
+  space: string;
   expiryDate: string;  // 'DD/MM/YYYY'
   daysLeft: number;    // negative = expired
   shelfLife: number;
 };
+
+type InventoryItemResponse = {
+  id: string;
+  nombre: string;
+  marca?: string;
+  categoria?: string;
+  emoji?: string;
+  fecha_vencimiento?: string | null;  // 'YYYY-MM-DD'
+  estado: 'fresco' | 'por_vencer' | 'vencido';
+};
+
+// ------- API -------
+async function fetchInventory(_userId: string, _areaId: string): Promise<InventoryItemResponse[]> {
+  // TODO: conectar con Supabase / backend real
+  // const res = await fetch(`${API_BASE}/inventory?user_id=${_userId}`);
+  // if (!res.ok) throw new Error(`Error ${res.status}`);
+  // return res.json();
+
+  // Mock data mientras no hay backend conectado
+  return [
+    { id: '1', nombre: 'Leche', marca: 'La Serenísima', categoria: 'Heladera', emoji: '🥛', fecha_vencimiento: '2026-04-05', estado: 'fresco' },
+    { id: '2', nombre: 'Yogur', marca: 'Danone', categoria: 'Heladera', emoji: '🫙', fecha_vencimiento: '2026-03-30', estado: 'por_vencer' },
+    { id: '3', nombre: 'Pan lactal', marca: 'Bimbo', categoria: 'Alacena', emoji: '🍞', fecha_vencimiento: '2026-03-25', estado: 'vencido' },
+    { id: '4', nombre: 'Banana', marca: '', categoria: 'Frutas y verduras', emoji: '🍌', fecha_vencimiento: null, estado: 'fresco' },
+  ];
+}
 
 // ------- Helpers -------
 function calcDaysLeft(fechaVencimiento: string): number {
@@ -118,7 +149,7 @@ function ProductCard({ item }: { item: StockItem }) {
       </View>
 
       <Text style={styles.productName}>{item.name}</Text>
-      <Text style={styles.productBrand}>{item.brand}</Text>
+      {!!item.brand && <Text style={styles.productBrand}>{item.brand}</Text>}
 
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: status.borderColor }]} />
@@ -208,9 +239,8 @@ export default function StockScreen() {
           ))}
         </ScrollView>
 
-        {/* Product list */}
         {loading ? (
-          <ActivityIndicator size="large" color="#D4827A" style={styles.loader} />
+          <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
         ) : error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
@@ -231,18 +261,10 @@ export default function StockScreen() {
 // ------- Styles -------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  header: {
-    backgroundColor: '#D4827A',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: { color: '#fff', fontSize: 28, fontWeight: '800', fontStyle: 'italic' },
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 14, marginTop: 4 },
 
-  // Stats
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -266,26 +288,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 2,
   },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#1A1A1A',
-    lineHeight: 32,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 16,
-  },
+  statValue: { fontSize: 28, fontWeight: '800', color: '#1A1A1A', lineHeight: 32 },
+  statLabel: { fontSize: 12, color: '#666', lineHeight: 16 },
 
   filtersScroll: { marginBottom: 16 },
   filtersContent: { gap: 8, paddingRight: 4 },
   filterChip: { borderWidth: 1.5, borderColor: '#CCC', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#fff' },
-  filterChipActive: { backgroundColor: '#D4827A', borderColor: '#D4827A' },
+  filterChipActive: { backgroundColor: '#A8CFEE', borderColor: '#A8CFEE' },
   filterChipText: { fontSize: 14, color: '#555', fontWeight: '500' },
   filterChipTextActive: { color: '#fff', fontWeight: '700' },
 
-  // Product cards
   productCard: {
     backgroundColor: '#fff',
     borderWidth: 2,
@@ -300,98 +312,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  productEmoji: {
-    fontSize: 36,
-  },
-  spaceChip: {
-    backgroundColor: '#F0F0F0',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  spaceChipText: {
-    fontSize: 12,
-    color: '#555',
-    fontWeight: '600',
-  },
-  productName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 2,
-  },
-  productBrand: {
-    fontSize: 13,
-    color: '#4ABCB0',
-    marginBottom: 10,
-    fontWeight: '500',
-  },
-  progressTrack: {
-    height: 8,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 4,
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: 8,
-    backgroundColor: '#4ABCB0',
-    borderRadius: 4,
-  },
-  productFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  expiryLabel: {
-    fontSize: 12,
-    color: '#888',
-    marginBottom: 2,
-  },
-  expiryDate: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#222',
-  },
-  statusBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  productEmoji: { fontSize: 36 },
+  spaceChip: { backgroundColor: '#F0F0F0', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  spaceChipText: { fontSize: 12, color: '#555', fontWeight: '600' },
+  productName: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 2 },
+  productBrand: { fontSize: 13, color: '#4ABCB0', marginBottom: 10, fontWeight: '500' },
+  progressTrack: { height: 8, backgroundColor: '#E0E0E0', borderRadius: 4, marginBottom: 12, overflow: 'hidden' },
+  progressFill: { height: 8, backgroundColor: '#4ABCB0', borderRadius: 4 },
+  productFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  expiryLabel: { fontSize: 12, color: '#888', marginBottom: 2 },
+  expiryDate: { fontSize: 15, fontWeight: '700', color: '#222' },
+  statusBadge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
+  statusText: { fontSize: 13, fontWeight: '700' },
 
-  // Loading / Error
-  loader: {
-    marginTop: 40,
-  },
-  errorContainer: {
-    alignItems: 'center',
-    marginTop: 40,
-    gap: 12,
-  },
-  errorText: {
-    color: '#C0392B',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: '#D4827A',
-    borderRadius: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-  },
-  retryText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#888',
-    fontSize: 15,
-    marginTop: 30,
-  },
+  loader: { marginTop: 40 },
+  errorContainer: { alignItems: 'center', marginTop: 40, gap: 12 },
+  errorText: { color: '#C0392B', fontSize: 14, textAlign: 'center' },
+  retryButton: { backgroundColor: '#A8CFEE', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 },
+  retryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  emptyText: { textAlign: 'center', color: '#888', fontSize: 15, marginTop: 30 },
 });
