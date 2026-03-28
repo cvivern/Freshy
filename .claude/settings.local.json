@@ -5,7 +5,8 @@
       "WebFetch(domain:docs.roboflow.com)",
       "WebSearch",
       "Bash(npm --version)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx expo:*)"
     ]
   }
 }
