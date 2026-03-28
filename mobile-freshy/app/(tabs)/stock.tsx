@@ -1,3 +1,14 @@
+import React from 'react';
+import { StyleSheet, View, Text } from 'react-native';
+import AppHeader from '@/components/AppHeader';
+
+export default function StockScreen() {
+  return (
+    <View style={styles.container}>
+      <AppHeader />
+      <View style={styles.content}>
+        <Text style={styles.title}>Stock</Text>
+      </View>
 import React, { useState } from 'react';
 import {
   StyleSheet,
@@ -312,186 +323,19 @@ export default function StockScreen() {
   );
 }
 
-// ------- Styles -------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
   },
-  header: {
-    backgroundColor: '#D4827A',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '800',
-    fontStyle: 'italic',
-  },
-  scroll: {
-    flex: 1,
-  },
   content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 14,
-    marginTop: 4,
-  },
-
-  // Stats
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 28,
-  },
-  statCard: {
-    width: '47%',
-    borderWidth: 1.5,
-    borderRadius: 14,
-    padding: 14,
-    backgroundColor: '#fff',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  statIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
   },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#1A1A1A',
-    lineHeight: 32,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 16,
-  },
-
-  // Filters
-  filtersScroll: {
-    marginBottom: 16,
-  },
-  filtersContent: {
-    gap: 8,
-    paddingRight: 4,
-  },
-  filterChip: {
-    borderWidth: 1.5,
-    borderColor: '#CCC',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    backgroundColor: '#fff',
-  },
-  filterChipActive: {
-    backgroundColor: '#D4827A',
-    borderColor: '#D4827A',
-  },
-  filterChipText: {
-    fontSize: 14,
-    color: '#555',
-    fontWeight: '500',
-  },
-  filterChipTextActive: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-
-  // Product cards
-  productCard: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  productTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  productEmoji: {
-    fontSize: 36,
-  },
-  spaceChip: {
-    backgroundColor: '#F0F0F0',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  spaceChipText: {
-    fontSize: 12,
-    color: '#555',
-    fontWeight: '600',
-  },
-  productName: {
-    fontSize: 18,
-    fontWeight: '700',
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#222',
-    marginBottom: 2,
-  },
-  productBrand: {
-    fontSize: 13,
-    color: '#4ABCB0',
-    marginBottom: 10,
-    fontWeight: '500',
-  },
-  progressTrack: {
-    height: 8,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 4,
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: 8,
-    backgroundColor: '#4ABCB0',
-    borderRadius: 4,
-  },
-  productFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  expiryLabel: {
-    fontSize: 12,
-    color: '#888',
-    marginBottom: 2,
-  },
-  expiryDate: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#222',
-  },
-  statusBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#888',
-    fontSize: 15,
-    marginTop: 30,
   },
 });
