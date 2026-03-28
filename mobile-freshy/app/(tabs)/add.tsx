@@ -464,7 +464,6 @@ export default function AddScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-<<<<<<< HEAD
             <Text style={styles.description}>Tus productos en stock — agregá más unidades rápido.</Text>
             {loadingInventory ? (
               <ActivityIndicator size="small" color="#888" style={{ marginTop: 12 }} />
@@ -486,18 +485,6 @@ export default function AddScreen() {
                 </View>
               ))
             )}
-=======
-            <Text style={styles.description}>Tus productos favoritos — agregálos rápido sin escanear.</Text>
-            {FAVORITE_PRODUCTS.map((product) => (
-              <View key={product.id} style={styles.productRow}>
-                <Text style={styles.productEmoji}>{product.emoji}</Text>
-                <Text style={styles.productName}>{product.name}</Text>
-                <TouchableOpacity style={styles.addButton} onPress={() => openRestock(product)}>
-                  <Ionicons name="add" size={22} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            ))}
->>>>>>> 15739df467e882f02e8a87c864204587c1b61660
           </>
         )}
 
