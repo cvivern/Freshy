@@ -7,33 +7,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { fetchInventory, InventoryItemResponse } from '../../services/api';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
 
-// ------- API types & mock -------
-type InventoryItemResponse = {
-  id: string;
-  nombre: string;
-  marca?: string;
-  categoria?: string;
-  emoji?: string;
-  fecha_vencimiento?: string | null;
-  estado: 'fresco' | 'por_vencer' | 'vencido';
-};
-
-async function fetchInventory(_userId: string, _areaId: string): Promise<InventoryItemResponse[]> {
-  // TODO: conectar con Supabase / backend real
-  return [
-    { id: '1', nombre: 'Leche', marca: 'La Serenísima', categoria: 'Heladera', emoji: '🥛', fecha_vencimiento: '2026-04-05', estado: 'fresco' },
-    { id: '2', nombre: 'Yogur', marca: 'Danone', categoria: 'Heladera', emoji: '🫙', fecha_vencimiento: '2026-03-30', estado: 'por_vencer' },
-    { id: '3', nombre: 'Pan lactal', marca: 'Bimbo', categoria: 'Alacena', emoji: '🍞', fecha_vencimiento: '2026-03-25', estado: 'vencido' },
-    { id: '4', nombre: 'Banana', marca: '', categoria: 'Frutas y verduras', emoji: '🍌', fecha_vencimiento: null, estado: 'fresco' },
-  ];
-}
 
 // TODO: replace with real authenticated user + storage area IDs
-const USER_ID = 'TODO_REPLACE_WITH_REAL_USER_ID';
-const STORAGE_AREA_ID = 'TODO_REPLACE_WITH_REAL_STORAGE_AREA_UUID';
+const USER_ID = '00000000-0000-0000-0000-000000000101';
+const STORAGE_AREA_ID = '00000000-0000-0000-0001-000000000001';
 
 // ------- Types -------
 type StockItem = {
@@ -77,6 +58,9 @@ function mapToStockItem(item: InventoryItemResponse): StockItem {
       : item.estado === 'por_vencer'
       ? 7
       : -1;
+
+    
+  console.log(`Mapping item ${JSON.stringify(item)}`);
 
   return {
     id: item.id,

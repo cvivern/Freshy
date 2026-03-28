@@ -69,7 +69,7 @@ class InventoryService:
             emoji=catalog.get("emoji"),
             foto=row.get("foto_url") or catalog.get("image_url"),
             categoria=catalog.get("category"),
-            fecha_vencimiento=row.get("fecha_vencimiento"),
+            fecha_vencimiento=row.get("expiry_date"),
             estado=row.get("estado", "fresco"),
             last_used=last_used,
         )
