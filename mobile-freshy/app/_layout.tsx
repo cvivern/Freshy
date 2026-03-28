@@ -8,6 +8,8 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { MonitorProvider } from '@/contexts/MonitorContext';
+import MonitorToast from '@/components/MonitorToast';
 
 export {
   ErrorBoundary,
@@ -41,7 +43,10 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <RootLayoutNav />
+      <MonitorProvider>
+        <RootLayoutNav />
+        <MonitorToast />
+      </MonitorProvider>
     </AuthProvider>
   );
 }

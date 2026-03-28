@@ -4,6 +4,10 @@ export const API_BASE = 'https://backend-freshy.vercel.app';
 // Default household for seed data
 export const DEFAULT_HOUSEHOLD_ID = '00000000-0000-0000-0000-000000000001';
 
+// Fallback IDs used by background monitor when no selection is available
+export const DEFAULT_STORAGE_AREA_ID = '';
+export const DEFAULT_USER_ID = '';
+
 // ------- Auth helper -------
 function authHeaders(token?: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
