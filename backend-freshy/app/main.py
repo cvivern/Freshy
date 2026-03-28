@@ -46,4 +46,8 @@ app.include_router(storage_area_router, prefix=API_PREFIX)
 # ---------------------------------------------------------------------------
 @app.get("/health", tags=["Health"])
 def health_check():
-    return {"status": "ok", "version": settings.app_version}
+    return {
+        "status": "ok",
+        "version": settings.app_version,
+        "routes": ["/api/v1/inventory", "/api/v1/households", "/api/v1/storage-areas"],
+    }
