@@ -13,6 +13,7 @@ import {
   DEFAULT_STORAGE_AREA_ID,
   DEFAULT_USER_ID,
   fetchInventoryItems,
+  calcEstado,
   type InventoryItem,
 } from '@/services/api';
 
@@ -145,9 +146,9 @@ export default function StatsScreen() {
   }
 
   function computeStats(items: InventoryItem[]): StatsData {
-    const fresco = items.filter((i) => i.estado === 'fresco').length;
-    const por_vencer = items.filter((i) => i.estado === 'por_vencer').length;
-    const vencido = items.filter((i) => i.estado === 'vencido').length;
+    const fresco = items.filter((i) => calcEstado(i.fecha_vencimiento) === 'fresco').length;
+    const por_vencer = items.filter((i) => calcEstado(i.fecha_vencimiento) === 'por_vencer').length;
+    const vencido = items.filter((i) => calcEstado(i.fecha_vencimiento) === 'vencido').length;
 
     const counts: Record<string, { cantidad: number; emoji: string; brand: string }> = {};
     const catCounts: Record<string, number> = {};

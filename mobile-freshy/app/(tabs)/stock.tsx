@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
-import { fetchInventory, DEFAULT_USER_ID, DEFAULT_STORAGE_AREA_ID } from '@/services/api';
+import { fetchInventory, DEFAULT_USER_ID, DEFAULT_STORAGE_AREA_ID, calcEstado } from '@/services/api';
 import type { InventoryItemResponse } from '@/services/api';
 
 // ------- Config -------
@@ -43,24 +43,17 @@ function formatDate(fechaVencimiento: string): string {
   return `${day}/${month}/${year}`;
 }
 
-function shelfLifeFromEstado(estado: InventoryItemResponse['estado']): number {
+function shelfLifeFromEstado(estado: StockItem['estado']): number {
   if (estado === 'vencido') return 7;
   if (estado === 'por_vencer') return 30;
   return 365;
 }
 
 function mapToStockItem(item: InventoryItemResponse): StockItem {
-  const daysLeft =
-    item.fecha_vencimiento != null
-      ? calcDaysLeft(item.fecha_vencimiento)
-      : item.estado === 'fresco'
-      ? 999
-      : item.estado === 'por_vencer'
-      ? 7
-      : -1;
-
-    
-  console.log(`Mapping item ${JSON.stringify(item)}`);
+  const daysLeft = item.fecha_vencimiento != null
+    ? calcDaysLeft(item.fecha_vencimiento)
+    : 999;
+  const estado = calcEstado(item.fecha_vencimiento);
 
   return {
     id: item.id,
@@ -70,8 +63,8 @@ function mapToStockItem(item: InventoryItemResponse): StockItem {
     space: item.categoria ?? 'General',
     expiryDate: item.fecha_vencimiento ? formatDate(item.fecha_vencimiento) : 'Sin fecha',
     daysLeft,
-    shelfLife: shelfLifeFromEstado(item.estado),
-    estado: item.estado,
+    shelfLife: shelfLifeFromEstado(estado),
+    estado,
   };
 }
 
