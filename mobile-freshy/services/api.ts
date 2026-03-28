@@ -243,20 +243,6 @@ export async function deleteStorageArea(storageAreaId: string): Promise<void> {
   }
 }
 
-// Maps Roboflow class names to readable Spanish labels
-// Valid classes from this model: apple, kiwi, orange, pear, strawberry, tomato
-export function formatItemName(cls: string): string {
-  // Valid classes from this model: apple, kiwi, orange, pear, strawberry, tomato
-  const map: Record<string, string> = {
-    apple: 'Manzana',
-    kiwi: 'Kiwi',
-    orange: 'Naranja',
-    pear: 'Pera',
-    strawberry: 'Frutilla',
-    tomato: 'Tomate',
-  };
-  return map[cls.toLowerCase()] ?? cls.replace(/_/g, ' ');
-  
 export async function addToInventory(payload: AddInventoryPayload): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/inventory/`,
