@@ -6,7 +6,8 @@
       "WebSearch",
       "Bash(npm --version)",
       "Bash(npx tsc:*)",
-      "Bash(npx expo:*)"
+      "Bash(npx expo:*)",
+      "Bash(cat -n \"c:/Users/cachi/OneDrive/Documents/Freshy/mobile-freshy/app/\\(tabs\\)/add.tsx\")"
     ]
   }
 }

@@ -128,11 +128,32 @@ const FAVORITE_PRODUCTS: FavoriteProduct[] = [
   { id: 3, emoji: '🍌', name: 'Banana' },
 ];
 
+// ------- Tab types -------
+type AddTab = 'productos' | 'espacios' | 'hogares';
+
+const ADD_TABS: { key: AddTab; label: string }[] = [
+  { key: 'productos', label: 'Productos' },
+  { key: 'espacios', label: 'Espacios' },
+  { key: 'hogares', label: 'Hogares' },
+];
+
+// ------- Mock Data for Espacios / Hogares -------
+const SPACES = [
+  { id: 1, emoji: '🧊', name: 'Heladera' },
+  { id: 2, emoji: '🗄️', name: 'Alacena' },
+  { id: 3, emoji: '🥶', name: 'Freezer' },
+];
+
+const HOUSEHOLDS = [
+  { id: 1, emoji: '🏠', name: 'Casa de Cata', members: 2 },
+];
+
 // ------- Main Screen -------
 export default function AddScreen() {
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
 
+  const [activeTab, setActiveTab] = useState<AddTab>('productos');
   const [phase, setPhase] = useState<Phase>('select_type');
   const [category, setCategory] = useState<ProductCategory | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -432,49 +453,109 @@ export default function AddScreen() {
   return (
     <View style={styles.container}>
       <AppHeader />
+
+      {/* ---- 3-tab bar: Productos / Espacios / Hogares ---- */}
+      <View style={styles.tabBar}>
+        {ADD_TABS.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
+            onPress={() => setActiveTab(tab.key)}
+          >
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-        <Text style={styles.sectionTitle}>¿Qué vas a agregar?</Text>
-        <Text style={styles.sectionSubtitle}>Elegí el tipo de producto para que la IA use el análisis correcto.</Text>
+        {/* ---- Productos tab ---- */}
+        {activeTab === 'productos' && (
+          <>
+            <Text style={styles.sectionTitle}>¿Qué vas a agregar?</Text>
+            <Text style={styles.sectionSubtitle}>Elegí el tipo de producto para que la IA use el análisis correcto.</Text>
 
-        <TouchableOpacity style={styles.categoryCard} onPress={() => selectCategory('fruta_verdura')} activeOpacity={0.8}>
-          <View style={[styles.categoryIconWrap, { backgroundColor: '#DFF5E3' }]}>
-            <Text style={styles.categoryEmoji}>🥦</Text>
-          </View>
-          <View style={styles.categoryInfo}>
-            <Text style={styles.categoryTitle}>Fruta o verdura</Text>
-            <Text style={styles.categorySubtitle}>La IA detecta el tipo y su estado de frescura</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#CCC" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.categoryCard} onPress={() => selectCategory('otro')} activeOpacity={0.8}>
-          <View style={[styles.categoryIconWrap, { backgroundColor: '#E8F4FF' }]}>
-            <Text style={styles.categoryEmoji}>🥫</Text>
-          </View>
-          <View style={styles.categoryInfo}>
-            <Text style={styles.categoryTitle}>Producto envasado</Text>
-            <Text style={styles.categorySubtitle}>Lácteos, enlatados, bebidas, snacks, etc.</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#CCC" />
-        </TouchableOpacity>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>o hace un restock de productos que ya tenias</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <Text style={styles.description}>Tus productos favoritos — agregálos rápido sin escanear.</Text>
-        {FAVORITE_PRODUCTS.map((product) => (
-          <View key={product.id} style={styles.productRow}>
-            <Text style={styles.productEmoji}>{product.emoji}</Text>
-            <Text style={styles.productName}>{product.name}</Text>
-            <TouchableOpacity style={styles.addButton} onPress={() => openRestock(product)}>
-              <Ionicons name="add" size={22} color="#fff" />
+            <TouchableOpacity style={styles.categoryCard} onPress={() => selectCategory('fruta_verdura')} activeOpacity={0.8}>
+              <View style={[styles.categoryIconWrap, { backgroundColor: '#DFF5E3' }]}>
+                <Text style={styles.categoryEmoji}>🥦</Text>
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryTitle}>Fruta o verdura</Text>
+                <Text style={styles.categorySubtitle}>La IA detecta el tipo y su estado de frescura</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#CCC" />
             </TouchableOpacity>
-          </View>
-        ))}
+
+            <TouchableOpacity style={styles.categoryCard} onPress={() => selectCategory('otro')} activeOpacity={0.8}>
+              <View style={[styles.categoryIconWrap, { backgroundColor: '#E8F4FF' }]}>
+                <Text style={styles.categoryEmoji}>🥫</Text>
+              </View>
+              <View style={styles.categoryInfo}>
+                <Text style={styles.categoryTitle}>Producto envasado</Text>
+                <Text style={styles.categorySubtitle}>Lácteos, enlatados, bebidas, snacks, etc.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#CCC" />
+            </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>o hace un restock de productos que ya tenias</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <Text style={styles.description}>Tus productos favoritos — agregálos rápido sin escanear.</Text>
+            {FAVORITE_PRODUCTS.map((product) => (
+              <View key={product.id} style={styles.productRow}>
+                <Text style={styles.productEmoji}>{product.emoji}</Text>
+                <Text style={styles.productName}>{product.name}</Text>
+                <TouchableOpacity style={styles.addButton} onPress={() => openRestock(product)}>
+                  <Ionicons name="add" size={22} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </>
+        )}
+
+        {/* ---- Espacios tab ---- */}
+        {activeTab === 'espacios' && (
+          <>
+            <Text style={styles.sectionTitle}>Espacios de almacenamiento</Text>
+            <Text style={styles.sectionSubtitle}>Organizá tus productos por área del hogar.</Text>
+            {SPACES.map((space) => (
+              <View key={space.id} style={styles.categoryCard}>
+                <View style={[styles.categoryIconWrap, { backgroundColor: '#E8F4FF' }]}>
+                  <Text style={styles.categoryEmoji}>{space.emoji}</Text>
+                </View>
+                <View style={styles.categoryInfo}>
+                  <Text style={styles.categoryTitle}>{space.name}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#CCC" />
+              </View>
+            ))}
+          </>
+        )}
+
+        {/* ---- Hogares tab ---- */}
+        {activeTab === 'hogares' && (
+          <>
+            <Text style={styles.sectionTitle}>Mis hogares</Text>
+            <Text style={styles.sectionSubtitle}>Gestioná los hogares en los que participás.</Text>
+            {HOUSEHOLDS.map((hh) => (
+              <View key={hh.id} style={styles.categoryCard}>
+                <View style={[styles.categoryIconWrap, { backgroundColor: '#F0F0F0' }]}>
+                  <Text style={styles.categoryEmoji}>{hh.emoji}</Text>
+                </View>
+                <View style={styles.categoryInfo}>
+                  <Text style={styles.categoryTitle}>{hh.name}</Text>
+                  <Text style={styles.categorySubtitle}>{hh.members} miembros</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#CCC" />
+              </View>
+            ))}
+          </>
+        )}
 
       </ScrollView>
 
@@ -612,7 +693,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 24,
     height: 24,
-    borderColor: '#D4827A',
+    borderColor: '#A8CFEE',
     borderWidth: 3,
   },
   camCornerTeal: { borderColor: '#4ABCB0' },
@@ -638,7 +719,7 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     borderWidth: 4,
-    borderColor: '#D4827A',
+    borderColor: '#A8CFEE',
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -710,7 +791,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#D4827A',
+    backgroundColor: '#A8CFEE',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 20,
@@ -728,6 +809,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   secondaryBtnText: { fontSize: 14, color: '#888', fontWeight: '600' },
+
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderRadius: 999,
+    backgroundColor: '#F0F0F0',
+  },
+  tabItemActive: {
+    backgroundColor: '#A8CFEE',
+  },
+  tabLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+  },
+  tabLabelActive: {
+    color: '#fff',
+  },
 
   // Select type screen
   sectionTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', marginBottom: 6 },
@@ -770,7 +880,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#D4827A',
+    backgroundColor: '#A8CFEE',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -8,7 +8,28 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchInventory, InventoryItemResponse } from '../../services/api';
+import AppHeader from '@/components/AppHeader';
+
+// ------- API types & mock -------
+type InventoryItemResponse = {
+  id: string;
+  nombre: string;
+  marca?: string;
+  categoria?: string;
+  emoji?: string;
+  fecha_vencimiento?: string | null;
+  estado: 'fresco' | 'por_vencer' | 'vencido';
+};
+
+async function fetchInventory(_userId: string, _areaId: string): Promise<InventoryItemResponse[]> {
+  // TODO: conectar con Supabase / backend real
+  return [
+    { id: '1', nombre: 'Leche', marca: 'La Serenísima', categoria: 'Heladera', emoji: '🥛', fecha_vencimiento: '2026-04-05', estado: 'fresco' },
+    { id: '2', nombre: 'Yogur', marca: 'Danone', categoria: 'Heladera', emoji: '🫙', fecha_vencimiento: '2026-03-30', estado: 'por_vencer' },
+    { id: '3', nombre: 'Pan lactal', marca: 'Bimbo', categoria: 'Alacena', emoji: '🍞', fecha_vencimiento: '2026-03-25', estado: 'vencido' },
+    { id: '4', nombre: 'Banana', marca: '', categoria: 'Frutas y verduras', emoji: '🍌', fecha_vencimiento: null, estado: 'fresco' },
+  ];
+}
 
 // TODO: replace with real authenticated user + storage area IDs
 const USER_ID = 'TODO_REPLACE_WITH_REAL_USER_ID';
@@ -185,9 +206,7 @@ export default function StockScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>freshy</Text>
-      </View>
+      <AppHeader />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>Resumen del hogar</Text>
@@ -217,7 +236,7 @@ export default function StockScreen() {
 
         {/* Product list */}
         {loading ? (
-          <ActivityIndicator size="large" color="#D4827A" style={styles.loader} />
+          <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
         ) : error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
@@ -238,18 +257,6 @@ export default function StockScreen() {
 // ------- Styles -------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  header: {
-    backgroundColor: '#D4827A',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '800',
-    fontStyle: 'italic',
-  },
   scroll: {
     flex: 1,
   },
@@ -318,8 +325,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   filterChipActive: {
-    backgroundColor: '#D4827A',
-    borderColor: '#D4827A',
+    backgroundColor: '#A8CFEE',
+    borderColor: '#A8CFEE',
   },
   filterChipText: {
     fontSize: 14,
@@ -424,7 +431,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#D4827A',
+    backgroundColor: '#A8CFEE',
     borderRadius: 20,
     paddingHorizontal: 24,
     paddingVertical: 10,
