@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingRight: 16,
   },
   logo: {
     height: 70,
@@ -73,7 +74,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 4,
-
+    marginTop: 16,
   },
   hogarText: {
     color: '#fff',
