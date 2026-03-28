@@ -1,101 +1,73 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  StyleSheet,
+  ActivityIndicator,
   ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
   View,
-  Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { fetchInventory, InventoryItemResponse } from '../../services/api';
+
+// TODO: replace with real authenticated user + storage area IDs
+const USER_ID = 'TODO_REPLACE_WITH_REAL_USER_ID';
+const STORAGE_AREA_ID = 'TODO_REPLACE_WITH_REAL_STORAGE_AREA_UUID';
 
 // ------- Types -------
 type StockItem = {
-  id: number;
+  id: string;
   emoji: string;
   name: string;
   brand: string;
-  space: string;   // ej: 'Heladera', 'Alacena', 'Congelados'
+  space: string;       // category used as space chip
   expiryDate: string;  // 'DD/MM/YYYY'
-  daysLeft: number;    // negativo = vencido
+  daysLeft: number;    // negative = expired
   shelfLife: number;
 };
 
-// ------- Mock Data -------
-// TODO: reemplazar con query a Supabase: inventory join storage_areas join catalog_items
-const MOCK_STOCK: StockItem[] = [
-  {
-    id: 1,
-    emoji: '🍗',
-    name: 'Pechuga de pollo',
-    brand: 'Granja del Sol',
-    space: 'Heladera',
-    expiryDate: '27/03/2026',
-    daysLeft: -1,
-    shelfLife: 3,
-  },
-  {
-    id: 2,
-    emoji: '🧀',
-    name: 'Queso cremoso',
-    brand: 'La Serenísima',
-    space: 'Heladera',
-    expiryDate: '05/04/2026',
-    daysLeft: 8,
-    shelfLife: 20,
-  },
-  {
-    id: 3,
-    emoji: '🥛',
-    name: 'Yogur frutilla',
-    brand: 'Danone',
-    space: 'Heladera',
-    expiryDate: '31/03/2026',
-    daysLeft: 3,
-    shelfLife: 14,
-  },
-  {
-    id: 4,
-    emoji: '🥫',
-    name: 'Atún enlatado',
-    brand: 'Albo',
-    space: 'Alacena',
-    expiryDate: '10/06/2027',
-    daysLeft: 440,
-    shelfLife: 730,
-  },
-  {
-    id: 5,
-    emoji: '🍝',
-    name: 'Fideos tallarines',
-    brand: 'Matarazzo',
-    space: 'Alacena',
-    expiryDate: '15/01/2027',
-    daysLeft: 293,
-    shelfLife: 365,
-  },
-  {
-    id: 6,
-    emoji: '🍕',
-    name: 'Pizza congelada',
-    brand: 'Vizzio',
-    space: 'Congelados',
-    expiryDate: '01/04/2026',
-    daysLeft: 4,
-    shelfLife: 90,
-  },
-  {
-    id: 7,
-    emoji: '🍦',
-    name: 'Helado vainilla',
-    brand: 'Frigor',
-    space: 'Congelados',
-    expiryDate: '28/03/2026',
-    daysLeft: 0,
-    shelfLife: 180,
-  },
-];
-
 // ------- Helpers -------
+function calcDaysLeft(fechaVencimiento: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(fechaVencimiento);
+  expiry.setHours(0, 0, 0, 0);
+  return Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function formatDate(fechaVencimiento: string): string {
+  const [year, month, day] = fechaVencimiento.split('-');
+  return `${day}/${month}/${year}`;
+}
+
+function shelfLifeFromEstado(estado: InventoryItemResponse['estado']): number {
+  if (estado === 'vencido') return 7;
+  if (estado === 'por_vencer') return 30;
+  return 365;
+}
+
+function mapToStockItem(item: InventoryItemResponse): StockItem {
+  const daysLeft =
+    item.fecha_vencimiento != null
+      ? calcDaysLeft(item.fecha_vencimiento)
+      : item.estado === 'fresco'
+      ? 999
+      : item.estado === 'por_vencer'
+      ? 7
+      : -1;
+
+  return {
+    id: item.id,
+    emoji: item.emoji ?? '📦',
+    name: item.nombre,
+    brand: item.marca ?? '',
+    space: item.categoria ?? 'General',
+    expiryDate: item.fecha_vencimiento ? formatDate(item.fecha_vencimiento) : 'Sin fecha',
+    daysLeft,
+    shelfLife: shelfLifeFromEstado(item.estado),
+  };
+}
+
 function getStatus(daysLeft: number): {
   label: string;
   bg: string;
@@ -165,7 +137,6 @@ function ProductCard({ item }: { item: StockItem }) {
   const status = getStatus(item.daysLeft);
   return (
     <View style={[styles.productCard, { borderColor: status.borderColor }]}>
-      {/* Top: emoji + space chip */}
       <View style={styles.productTopRow}>
         <Text style={styles.productEmoji}>{item.emoji}</Text>
         <View style={styles.spaceChip}>
@@ -173,13 +144,9 @@ function ProductCard({ item }: { item: StockItem }) {
         </View>
       </View>
 
-      {/* Name */}
       <Text style={styles.productName}>{item.name}</Text>
-
-      {/* Brand */}
       <Text style={styles.productBrand}>{item.brand}</Text>
 
-      {/* Progress bar */}
       <View style={styles.progressTrack}>
         <View
           style={[
@@ -192,7 +159,6 @@ function ProductCard({ item }: { item: StockItem }) {
         />
       </View>
 
-      {/* Expiry + Status */}
       <View style={styles.productFooter}>
         <View>
           <Text style={styles.expiryLabel}>Vencimiento</Text>
@@ -211,10 +177,30 @@ function ProductCard({ item }: { item: StockItem }) {
 // ------- Main Screen -------
 export default function StockScreen() {
   const [activeFilter, setActiveFilter] = useState<'todos' | 'buen_estado' | 'por_vencer' | 'vencidos'>('todos');
+  const [items, setItems] = useState<StockItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const stats = calcStats(MOCK_STOCK);
+  async function loadInventory() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchInventory(USER_ID, STORAGE_AREA_ID);
+      setItems(data.map(mapToStockItem));
+    } catch (e: any) {
+      setError(e.message ?? 'Error al cargar el inventario');
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const filtered = MOCK_STOCK.filter((item) => {
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  const stats = calcStats(items);
+
+  const filtered = items.filter((item) => {
     if (activeFilter === 'todos') return true;
     if (activeFilter === 'vencidos') return item.daysLeft < 0;
     if (activeFilter === 'por_vencer') return item.daysLeft >= 0 && item.daysLeft <= 30;
@@ -302,7 +288,16 @@ export default function StockScreen() {
         </ScrollView>
 
         {/* Product list */}
-        {filtered.length === 0 ? (
+        {loading ? (
+          <ActivityIndicator size="large" color="#D4827A" style={styles.loader} />
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadInventory}>
+              <Text style={styles.retryText}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filtered.length === 0 ? (
           <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
         ) : (
           filtered.map((item) => <ProductCard key={item.id} item={item} />)
@@ -487,6 +482,32 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+
+  // Loading / Error
+  loader: {
+    marginTop: 40,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    marginTop: 40,
+    gap: 12,
+  },
+  errorText: {
+    color: '#C0392B',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#D4827A',
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  retryText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
   },
   emptyText: {
     textAlign: 'center',
