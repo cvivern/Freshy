@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Freshy",
+    "slug": "freshy",
+    "version": "1.0.0",
+    "scheme": "freshy",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.freshy.app"
+    },
+    "android": {
+      "package": "com.freshy.app"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
