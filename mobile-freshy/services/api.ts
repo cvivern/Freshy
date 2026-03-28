@@ -1,78 +1,169 @@
-// Change this to your computer's local IP when testing on a physical device
-// e.g. 'http://192.168.1.100:8000'
-const API_BASE = 'http://localhost:8000/api/v1';
+// ------- Config -------
+export const API_BASE = 'https://backend-freshy.vercel.app';
 
-export type DetectionResult = {
-  predictions: { class: string; confidence: number }[];
-  detected_items: string[];
+// ID del storage area y usuario (Heladera Principal)
+export const DEFAULT_STORAGE_AREA_ID = '00000000-0000-0000-0001-000000000001';
+export const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000101';
+
+// ------- Types -------
+export type Detection = { label: string; confidence: number };
+
+export type ProductInfo = { category: string; brand: string; name: string };
+
+export type BarcodeInfo = { barcode: string; expiryDate: string };
+
+export type InventoryItem = {
+  id: string;
+  nombre: string;
+  marca: string | null;
+  emoji: string | null;
+  foto: string | null;
+  categoria: string | null;
+  fecha_vencimiento: string | null; // 'YYYY-MM-DD'
+  estado: 'fresco' | 'por_vencer' | 'vencido';
+  last_used: string | null;
 };
 
-export type AddItemsPayload = {
+export type AddInventoryPayload = {
   storage_area_id: string;
-  items: { name: string; quantity: number; unit: string }[];
+  product_name: string;
+  product_brand?: string;
+  product_category?: string;
+  barcode?: string;
+  emoji?: string;
+  quantity: number;
+  unit?: string;
+  expiry_date?: string;
 };
 
-export async function detectFruits(imageUri: string): Promise<DetectionResult> {
-  const formData = new FormData();
-  formData.append('file', {
-    uri: imageUri,
-    name: 'photo.jpg',
-    type: 'image/jpeg',
-  } as any);
+// ------- Label mapping (Roboflow fruit-b2sy0) -------
+const LABEL_MAP: Record<string, string> = {
+  apple_fresh:       'Manzana',
+  apple_rotten:      'Manzana (en mal estado)',
+  banana_fresh:      'Banana',
+  banana_rotten:     'Banana (en mal estado)',
+  orange_fresh:      'Naranja',
+  orange_rotten:     'Naranja (en mal estado)',
+  mango_fresh:       'Mango',
+  mango_rotten:      'Mango (en mal estado)',
+  strawberry_fresh:  'Frutilla',
+  strawberry_rotten: 'Frutilla (en mal estado)',
+  grapes_fresh:      'Uvas',
+  grapes_rotten:     'Uvas (en mal estado)',
+  watermelon_fresh:  'Sandía',
+  pineapple_fresh:   'Ananá',
+  lemon_fresh:       'Limón',
+};
 
-  const response = await fetch(`${API_BASE}/detection/identify`, {
-    method: 'POST',
-    body: formData,
-  });
+// ------- Helpers -------
+export function parseFruitDetections(detections: Detection[]): ProductInfo {
+  if (!detections.length) return { category: 'Frutas y verduras', brand: '—', name: 'No reconocido' };
+  const best = detections.reduce((a, b) => (a.confidence > b.confidence ? a : b));
+  const name = LABEL_MAP[best.label] ?? best.label.replace(/_/g, ' ');
+  return { category: 'Frutas y verduras', brand: '—', name };
+}
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Error ${response.status}`);
+/** Convierte DD/MM/AAAA o DD/MM/AA → YYYY-MM-DD. Si ya está en ISO lo devuelve igual. */
+export function toISODate(input: string): string {
+  const trimmed = input.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parts = trimmed.split('/');
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    const year = y.length === 2 ? `20${y}` : y;
+    return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
+  return trimmed;
+}
 
+// ------- Base fetch con timeout -------
+export async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs = 30000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    return response;
+  } catch (err: any) {
+    if (err?.name === 'AbortError')
+      throw new Error('La solicitud tardó demasiado. Verificá que el backend esté corriendo.');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ------- Detection endpoints -------
+export async function detectFrutaVerdura(uri: string): Promise<ProductInfo> {
+  const formData = new FormData();
+  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  const response = await fetchWithTimeout(`${API_BASE}/detection/fruits`, { method: 'POST', body: formData });
+  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
+  const data = await response.json();
+  return parseFruitDetections((data.detections ?? []) as Detection[]);
+}
+
+export async function detectOtroProducto(uri: string): Promise<ProductInfo> {
+  const formData = new FormData();
+  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  const response = await fetchWithTimeout(`${API_BASE}/detection/scan/product`, { method: 'POST', body: formData });
+  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
+  const data = await response.json();
+  return {
+    category: 'Producto envasado',
+    brand: data.brand ?? '—',
+    name: data.name ?? '—',
+  };
+}
+
+export async function scanBarcodeImage(uri: string): Promise<BarcodeInfo> {
+  const formData = new FormData();
+  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  const response = await fetchWithTimeout(`${API_BASE}/detection/scan/barcode`, { method: 'POST', body: formData });
+  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
+  const data = await response.json();
+  return {
+    barcode: data.barcode ?? '',
+    expiryDate: data.expiry_date ?? '',
+  };
+}
+
+// ------- Inventory endpoints -------
+export async function fetchInventoryItems(
+  userId: string = DEFAULT_USER_ID,
+  storageAreaId: string = DEFAULT_STORAGE_AREA_ID
+): Promise<InventoryItem[]> {
+  const url = `${API_BASE}/api/v1/inventory/?user_id=${encodeURIComponent(userId)}&storage_area_id=${encodeURIComponent(storageAreaId)}`;
+  const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+  if (!response.ok) return [];
   return response.json();
 }
 
-export async function addToInventory(payload: AddItemsPayload): Promise<void> {
-  const response = await fetch(`${API_BASE}/inventory/`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+/** @deprecated Usá fetchInventoryItems. Mantenido para compatibilidad con stock.tsx */
+export type InventoryItemResponse = InventoryItem;
 
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Error ${response.status}`);
-  }
+/** @deprecated Usá fetchInventoryItems. Mantenido para compatibilidad con stock.tsx */
+export async function fetchInventory(
+  userId: string,
+  storageAreaId: string
+): Promise<InventoryItem[]> {
+  return fetchInventoryItems(userId, storageAreaId);
 }
 
-// Maps Roboflow class names (e.g. "fresh_apple") to readable Spanish labels
-export function formatItemName(cls: string): string {
-  const map: Record<string, string> = {
-    fresh_apple: 'Manzana',
-    rotten_apple: 'Manzana (mala)',
-    fresh_banana: 'Banana',
-    rotten_banana: 'Banana (mala)',
-    fresh_orange: 'Naranja',
-    rotten_orange: 'Naranja (mala)',
-    fresh_tomato: 'Tomate',
-    rotten_tomato: 'Tomate (malo)',
-    fresh_grape: 'Uva',
-    rotten_grape: 'Uva (mala)',
-    fresh_mango: 'Mango',
-    rotten_mango: 'Mango (malo)',
-    fresh_strawberry: 'Frutilla',
-    rotten_strawberry: 'Frutilla (mala)',
-    fresh_lemon: 'Limón',
-    rotten_lemon: 'Limón (malo)',
-    apple: 'Manzana',
-    banana: 'Banana',
-    orange: 'Naranja',
-    tomato: 'Tomate',
-    grape: 'Uva',
-    mango: 'Mango',
-    strawberry: 'Frutilla',
-    lemon: 'Limón',
-  };
-  return map[cls.toLowerCase()] ?? cls.replace(/_/g, ' ');
+export async function addToInventory(payload: AddInventoryPayload): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/inventory/`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Error del servidor (${response.status}): ${text}`);
+  }
 }
