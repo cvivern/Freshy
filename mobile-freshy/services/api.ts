@@ -12,6 +12,11 @@ export type ProductInfo = { category: string; brand: string; name: string };
 
 export type BarcodeInfo = { barcode: string; expiryDate: string };
 
+export type GeminiResult =
+  | { type: 'fruit' | 'vegetable'; name: string; freshness: 'fresco' | 'medio' | 'malo'; scanned_at: string }
+  | { type: 'barcode_product'; name: string; brand: string | null; expiry_date: string | null; scanned_at: string }
+  | { type: 'unknown'; scanned_at: string };
+
 export type InventoryItem = {
   id: string;
   nombre: string;
@@ -109,6 +114,18 @@ export async function fetchWithTimeout(
 }
 
 // ------- Detection endpoints -------
+
+/** Main Gemini endpoint — detects fruits, vegetables and packaged products */
+export async function analyzeImage(uri: string): Promise<GeminiResult> {
+  const formData = new FormData();
+  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/detection/analyze`,
+    { method: 'POST', body: formData }
+  );
+  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
+  return response.json();
+}
 export async function detectFrutaVerdura(uri: string): Promise<ProductInfo> {
   const formData = new FormData();
   formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
