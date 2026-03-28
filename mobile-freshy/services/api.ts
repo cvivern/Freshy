@@ -20,7 +20,6 @@ export type InventoryItem = {
   foto: string | null;
   categoria: string | null;
   fecha_vencimiento: string | null; // 'YYYY-MM-DD'
-  estado: 'fresco' | 'por_vencer' | 'vencido';
   last_used: string | null;
 };
 
@@ -61,6 +60,18 @@ export function parseFruitDetections(detections: Detection[]): ProductInfo {
   const best = detections.reduce((a, b) => (a.confidence > b.confidence ? a : b));
   const name = LABEL_MAP[best.label] ?? best.label.replace(/_/g, ' ');
   return { category: 'Frutas y verduras', brand: '—', name };
+}
+
+export function calcEstado(
+  fechaVencimiento: string | null
+): 'fresco' | 'por_vencer' | 'vencido' {
+  if (!fechaVencimiento) return 'fresco';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(fechaVencimiento);
+  expiry.setHours(0, 0, 0, 0);
+  const daysLeft = Math.floor((expiry.getTime() - today.getTime()) / 86_400_000);
+  return daysLeft < 0 ? 'vencido' : daysLeft <= 7 ? 'por_vencer' : 'fresco';
 }
 
 /** Convierte DD/MM/AAAA o DD/MM/AA → YYYY-MM-DD. Si ya está en ISO lo devuelve igual. */
