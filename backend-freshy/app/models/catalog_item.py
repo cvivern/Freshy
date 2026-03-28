@@ -12,6 +12,8 @@ class CatalogItemBase(BaseModel):
     category: str | None = Field(None, examples=["lácteo"])
     est_shelf_life_days: int = Field(..., gt=0, examples=[7])
     image_url: str | None = Field(None, examples=["https://cdn.freshy.app/img/leche.png"])
+    marca: str | None = Field(None, examples=["La Serenísima"])
+    emoji: str | None = Field(None, examples=["🥛"])
 
 
 # ---------------------------------------------------------------------------
@@ -29,6 +31,8 @@ class ProductUpdate(BaseModel):
     category: str | None = None
     est_shelf_life_days: int | None = Field(None, gt=0)
     image_url: str | None = None
+    marca: str | None = None
+    emoji: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +54,8 @@ class FruitUpdate(BaseModel):
     category: str | None = None
     est_shelf_life_days: int | None = Field(None, gt=0)
     image_url: str | None = None
+    marca: str | None = None
+    emoji: str | None = None
 
 
 # ---------------------------------------------------------------------------

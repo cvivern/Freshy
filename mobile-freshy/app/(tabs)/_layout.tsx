@@ -30,9 +30,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="heladera"
+        name="stock"
         options={{
-          title: 'Heladera',
+          title: 'Stock',
           tabBarIcon: ({ color }) => <TabIcon name="grid-outline" color={color} />,
         }}
       />

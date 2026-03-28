@@ -74,46 +74,23 @@ function getStatus(daysLeft: number): {
   textColor: string;
   borderColor: string;
 } {
-  if (daysLeft < 0) {
-    return {
-      label: 'Vencido',
-      bg: '#FDDEDE',
-      textColor: '#C0392B',
-      borderColor: '#E07070',
-    };
-  }
-  if (daysLeft <= 30) {
-    return {
-      label: daysLeft === 0 ? 'Vence hoy' : `Vence en ${daysLeft}d`,
-      bg: '#FFF3CD',
-      textColor: '#996600',
-      borderColor: '#E0C050',
-    };
-  }
-  return {
-    label: 'En buen estado',
-    bg: '#DFF5E3',
-    textColor: '#27AE60',
-    borderColor: '#60B870',
-  };
+  if (daysLeft < 0) return { label: 'Vencido', bg: '#FDDEDE', textColor: '#C0392B', borderColor: '#E07070' };
+  if (daysLeft <= 30) return { label: daysLeft === 0 ? 'Vence hoy' : `Vence en ${daysLeft}d`, bg: '#FFF3CD', textColor: '#996600', borderColor: '#E0C050' };
+  return { label: 'En buen estado', bg: '#DFF5E3', textColor: '#27AE60', borderColor: '#60B870' };
 }
 
 function calcStats(items: StockItem[]) {
-  const total = items.length;
-  const vencidos = items.filter((i) => i.daysLeft < 0).length;
-  const porVencer = items.filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30).length;
-  const bienEstado = items.filter((i) => i.daysLeft > 30).length;
-  return { total, vencidos, porVencer, bienEstado };
+  return {
+    total: items.length,
+    vencidos: items.filter((i) => i.daysLeft < 0).length,
+    porVencer: items.filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30).length,
+    bienEstado: items.filter((i) => i.daysLeft > 30).length,
+  };
 }
 
 // ------- Sub-components -------
 function StatCard({
-  value,
-  label,
-  iconName,
-  iconColor,
-  borderColor,
-  bgColor,
+  value, label, iconName, iconColor, borderColor, bgColor,
 }: {
   value: number;
   label: string;
@@ -135,6 +112,7 @@ function StatCard({
 
 function ProductCard({ item }: { item: StockItem }) {
   const status = getStatus(item.daysLeft);
+  const progress = Math.min(1, Math.max(0, (item.shelfLife - item.daysLeft) / item.shelfLife));
   return (
     <View style={[styles.productCard, { borderColor: status.borderColor }]}>
       <View style={styles.productTopRow}>
@@ -148,15 +126,7 @@ function ProductCard({ item }: { item: StockItem }) {
       <Text style={styles.productBrand}>{item.brand}</Text>
 
       <View style={styles.progressTrack}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${Math.min(100, Math.max(0, (item.shelfLife - item.daysLeft) / item.shelfLife) * 100)}%` as any,
-              backgroundColor: status.borderColor,
-            },
-          ]}
-        />
+        <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: status.borderColor }]} />
       </View>
 
       <View style={styles.productFooter}>
@@ -165,9 +135,7 @@ function ProductCard({ item }: { item: StockItem }) {
           <Text style={styles.expiryDate}>{item.expiryDate}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-          <Text style={[styles.statusText, { color: status.textColor }]}>
-            {status.label}
-          </Text>
+          <Text style={[styles.statusText, { color: status.textColor }]}>{status.label}</Text>
         </View>
       </View>
     </View>
@@ -217,70 +185,30 @@ export default function StockScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>freshy</Text>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {/* Section title */}
         <Text style={styles.sectionTitle}>Resumen del hogar</Text>
 
-        {/* Stats grid */}
         <View style={styles.statsGrid}>
-          <StatCard
-            value={stats.total}
-            label="Total de productos"
-            iconName="cart-outline"
-            iconColor="#5B9BD5"
-            borderColor="#A8D0F0"
-            bgColor="#E8F4FF"
-          />
-          <StatCard
-            value={stats.bienEstado}
-            label="En buen estado"
-            iconName="checkmark-circle-outline"
-            iconColor="#27AE60"
-            borderColor="#80CC90"
-            bgColor="#DFF5E3"
-          />
-          <StatCard
-            value={stats.porVencer}
-            label="Por vencer (≤30 días)"
-            iconName="alarm-outline"
-            iconColor="#E07820"
-            borderColor="#F0C060"
-            bgColor="#FFF3CD"
-          />
-          <StatCard
-            value={stats.vencidos}
-            label="Vencidos"
-            iconName="close-circle-outline"
-            iconColor="#C0392B"
-            borderColor="#E07070"
-            bgColor="#FDDEDE"
-          />
+          <StatCard value={stats.total} label="Total de productos" iconName="cart-outline" iconColor="#5B9BD5" borderColor="#A8D0F0" bgColor="#E8F4FF" />
+          <StatCard value={stats.bienEstado} label="En buen estado" iconName="checkmark-circle-outline" iconColor="#27AE60" borderColor="#80CC90" bgColor="#DFF5E3" />
+          <StatCard value={stats.porVencer} label="Por vencer (≤30 días)" iconName="alarm-outline" iconColor="#E07820" borderColor="#F0C060" bgColor="#FFF3CD" />
+          <StatCard value={stats.vencidos} label="Vencidos" iconName="close-circle-outline" iconColor="#C0392B" borderColor="#E07070" bgColor="#FDDEDE" />
         </View>
 
-        {/* Products section */}
         <Text style={styles.sectionTitle}>Todos los productos</Text>
 
-        {/* Filter chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filtersScroll}
-          contentContainerStyle={styles.filtersContent}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll} contentContainerStyle={styles.filtersContent}>
           {FILTERS.map((f) => (
             <TouchableOpacity
               key={f.key}
               style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
               onPress={() => setActiveFilter(f.key)}
             >
-              <Text
-                style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}
-              >
+              <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>
                 {f.label}
               </Text>
             </TouchableOpacity>
@@ -309,10 +237,7 @@ export default function StockScreen() {
 
 // ------- Styles -------
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
+  container: { flex: 1, backgroundColor: '#fff' },
   header: {
     backgroundColor: '#D4827A',
     paddingTop: 50,
