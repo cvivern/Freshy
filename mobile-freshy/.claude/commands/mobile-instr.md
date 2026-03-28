@@ -1,0 +1,40 @@
+# Mobile App — SDK & Dependencies
+
+## Framework
+
+- **Expo** `~54.0.33` — meta-framework with managed workflow
+- **React Native** `0.81.5` — core mobile runtime (New Architecture enabled)
+- **Expo Router** `~6.0.23` — file-based routing (similar to Next.js)
+- **React** `19.1.0`
+- Targets: iOS, Android, and Web (Metro bundler)
+
+## Runtime Dependencies
+
+| Package | Version |
+|---|---|
+| `@expo/vector-icons` | `^15.0.3` |
+| `@react-navigation/native` | `^7.1.8` |
+| `expo` | `~54.0.33` |
+| `expo-constants` | `~18.0.13` |
+| `expo-font` | `~14.0.11` |
+| `expo-linking` | `~8.0.11` |
+| `expo-router` | `~6.0.23` |
+| `expo-splash-screen` | `~31.0.13` |
+| `expo-status-bar` | `~3.0.9` |
+| `expo-web-browser` | `~15.0.10` |
+| `react` | `19.1.0` |
+| `react-dom` | `19.1.0` |
+| `react-native` | `0.81.5` |
+| `react-native-reanimated` | `~4.1.1` |
+| `react-native-safe-area-context` | `~5.6.0` |
+| `react-native-screens` | `~4.16.0` |
+| `react-native-web` | `~0.21.0` |
+| `react-native-worklets` | `0.5.1` |
+
+## Dev Dependencies
+
+| Package | Version |
+|---|---|
+| `@types/react` | `~19.1.0` |
+| `react-test-renderer` | `19.1.0` |
+| `typescript` | `~5.9.2` |
