@@ -2,17 +2,24 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-const HOGARES = ['Casa', 'Oficina'];
+export type HogarOption = { id: string; name: string };
 
-export default function AppHeader() {
-  const [selectedHogar, setSelectedHogar] = useState('');
+type Props = {
+  hogares: HogarOption[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+};
+
+export default function AppHeaderConEleccionHogar({ hogares, selectedId, onSelect }: Props) {
   const [open, setOpen] = useState(false);
+  const selectedName = hogares.find(h => h.id === selectedId)?.name ?? '—';
 
   return (
     <View style={styles.header}>
       <TouchableOpacity style={styles.titleRow} onPress={() => setOpen(true)}>
         <Text style={styles.headerTitle}>freshy</Text>
         <View style={styles.hogarPill}>
+          <Text style={styles.hogarText}>{selectedName}</Text>
           <Ionicons name="chevron-down" size={13} color="#fff" />
         </View>
       </TouchableOpacity>
@@ -21,16 +28,16 @@ export default function AppHeader() {
         <TouchableOpacity style={styles.backdrop} onPress={() => setOpen(false)}>
           <View style={styles.menu}>
             <Text style={styles.menuTitle}>Hogar</Text>
-            {HOGARES.map(hogar => (
+            {hogares.map(hogar => (
               <TouchableOpacity
-                key={hogar}
-                style={[styles.menuItem, hogar === selectedHogar && styles.menuItemActive]}
-                onPress={() => { setSelectedHogar(hogar); setOpen(false); }}
+                key={hogar.id}
+                style={[styles.menuItem, hogar.id === selectedId && styles.menuItemActive]}
+                onPress={() => { onSelect(hogar.id); setOpen(false); }}
               >
-                <Text style={[styles.menuItemText, hogar === selectedHogar && styles.menuItemTextActive]}>
-                  {hogar}
+                <Text style={[styles.menuItemText, hogar.id === selectedId && styles.menuItemTextActive]}>
+                  {hogar.name}
                 </Text>
-                {hogar === selectedHogar && <Ionicons name="checkmark" size={18} color="#4A90D9" />}
+                {hogar.id === selectedId && <Ionicons name="checkmark" size={18} color="#4A90D9" />}
               </TouchableOpacity>
             ))}
           </View>
@@ -61,10 +68,11 @@ const styles = StyleSheet.create({
   hogarPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 20,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 4,
-    paddingLeft: 12,
   },
   hogarText: {
     color: '#fff',
