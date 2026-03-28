@@ -164,6 +164,80 @@ export async function fetchInventory(
   return fetchInventoryItems(userId, storageAreaId);
 }
 
+// ------- Households & Storage Areas -------
+
+export type Household = { id: string; name: string; owner_id: string };
+export type StorageArea = { id: string; name: string; climate: 'refrigerado' | 'seco' | 'congelado'; household_id: string; emoji?: string };
+
+// Default household for DEFAULT_USER_ID (matches seed data)
+export const DEFAULT_HOUSEHOLD_ID = '00000000-0000-0000-0000-000000000001';
+
+export const CLIMATE_EMOJI: Record<string, string> = {
+  refrigerado: '🧊',
+  seco: '🗄️',
+  congelado: '🥶',
+};
+
+export async function fetchHouseholds(userId: string): Promise<Household[]> {
+  const url = `${API_BASE}/api/v1/households/?user_id=${encodeURIComponent(userId)}`;
+  const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function createHousehold(ownerId: string, name: string): Promise<Household> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/households/`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner_id: ownerId, name }) }
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Error del servidor (${response.status}): ${text}`);
+  }
+  return response.json();
+}
+
+export async function deleteHousehold(householdId: string): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/households/${encodeURIComponent(householdId)}`,
+    { method: 'DELETE' }
+  );
+  if (!response.ok && response.status !== 204) {
+    const text = await response.text();
+    throw new Error(`Error del servidor (${response.status}): ${text}`);
+  }
+}
+
+export async function fetchStorageAreas(householdId: string): Promise<StorageArea[]> {
+  const url = `${API_BASE}/api/v1/storage-areas/?household_id=${encodeURIComponent(householdId)}`;
+  const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function createStorageArea(householdId: string, name: string, climate: StorageArea['climate']): Promise<StorageArea> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/storage-areas/`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ household_id: householdId, name, climate }) }
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Error del servidor (${response.status}): ${text}`);
+  }
+  return response.json();
+}
+
+export async function deleteStorageArea(storageAreaId: string): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/storage-areas/${encodeURIComponent(storageAreaId)}`,
+    { method: 'DELETE' }
+  );
+  if (!response.ok && response.status !== 204) {
+    const text = await response.text();
+    throw new Error(`Error del servidor (${response.status}): ${text}`);
+  }
+}
+
 export async function addToInventory(payload: AddInventoryPayload): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/inventory/`,
