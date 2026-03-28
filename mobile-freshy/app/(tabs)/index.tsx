@@ -16,7 +16,7 @@ type FoodItem = {
   id: number;
   emoji: string;
   name: string;
-  category: string;
+  brand: string;
   expiryDate: string;   // 'DD/MM/YYYY'
   state: string;        // ej: 'Descongelada', 'Abierto'
   daysLeft: number;     // negativo = vencido
@@ -28,7 +28,7 @@ const MOCK_ITEMS: FoodItem[] = [
     id: 1,
     emoji: '🍗',
     name: 'Pechuga de pollo',
-    category: 'Carnes',
+    brand: 'Carnes',
     expiryDate: '27/03/2026',
     state: 'Descongelada',
     daysLeft: -1,
@@ -38,7 +38,7 @@ const MOCK_ITEMS: FoodItem[] = [
     id: 2,
     emoji: '🍎',
     name: '3 Manzanas',
-    category: 'Frutas',
+    brand: 'Frutas',
     expiryDate: '30/03/2026',
     state: 'Fresca',
     daysLeft: 2,
@@ -48,7 +48,7 @@ const MOCK_ITEMS: FoodItem[] = [
     id: 3,
     emoji: '🥛',
     name: '2 Yogur',
-    category: 'Lácteos',
+    brand: 'Lácteos',
     expiryDate: '01/04/2026',
     state: 'Abierto',
     daysLeft: 4,
@@ -149,7 +149,7 @@ export default function HomeScreen() {
 
         {/* Subtitle */}
         <Text style={styles.subtitle}>
-          Aqui estan las cosas que tienes{'\n'}que comer en primero
+        Cosas a comer primero:
         </Text>
 
         {/* Food Items */}
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   },
   foodCategory: {
     fontSize: 14,
-    color: '#4ABCB0',
+    color: '#A8CFEE',
     marginBottom: 10,
   },
   progressTrack: {
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   },
   expiryLabel: {
     fontSize: 14,
-    color: '#4ABCB0',
+    color: '#A8CFEE',
   },
   expiryDate: {
     fontSize: 16,

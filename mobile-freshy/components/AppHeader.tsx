@@ -11,7 +11,7 @@ export default function AppHeader() {
 
 const styles = StyleSheet.create({
   header: {
-    backgroundColor: '#D4827A',
+    backgroundColor: '#A8CFEE',
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 20,
