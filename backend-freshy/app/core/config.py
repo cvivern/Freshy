@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_service_role_key: str
 
+    # OpenAI
+    openai_api_key: str
+
     # App
     app_name: str = "Freshy API"
     app_version: str = "0.1.0"
