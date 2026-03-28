@@ -4,15 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Freshy is a Hackitba hackathon project. The repository is in its initial state — no build system, language, or architecture has been established yet.
+Freshy is a Hackitba hackathon project — a household product inventory app with AI-powered recognition.
 
-vamos a usar: React Native, NativeWind UI, roboflow, postgreSQL, supabase, python, fastAPI
+Two components:
+- **Mobile app**: React Native + NativeWind UI
+- **Backend/AI**: Python + FastAPI + Roboflow + Supabase (PostgreSQL)
 
-vamos a hacer dos cosas: una app movil y una IA
+## Backend
 
-la app movil tiene que popoder tomar fotos para saber que producto es, tener distintos espacios(heladera, alacena,etc) y tambien distintos hogares y tambien poder agregar productos a cada hogar, mostrar el vencimiento de cada producto, contar la cantidad de productos que hay de cierto tipo, tener una opcion para renovar productos si estos ya se vencioron o terminaron y se compraron mas. Tambien tener un historial de productos que se registraron con la aplicacion y una seccion de estadisticas para mostrar cuantas veces se te vencio un producto, cuantos productos se vencieron, cuantos productos tenes en total, etc.
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env   # fill in keys
+uvicorn main:app --reload
+```
 
-La IA tiene que poder reconocer los productos a partir de las fotos, y también poder predecir el vencimiento de los productos a partir de su fecha de compra y su tipo. Tiene que poder detectar el estado en el que estan las frutas y verduras (si estan buenas, a punto de vencerse o vencidas) a partir de las fotos. Y detectar cuando se sacan o se meten productos a los hogares para actualizar el stock.
+API docs available at `http://localhost:8000/docs`.
 
+### Environment variables (`backend/.env`)
+- `ROBOFLOW_API_KEY` — from roboflow.com
+- `SUPABASE_URL` / `SUPABASE_KEY` — from the Supabase project dashboard
 
-Update this file once the tech stack and project structure are decided.
+## AI / Roboflow
+
+Model used: **peng-majiz/fruit-b2sy0** (version 1)
+- Detects fruits and their freshness state from images
+- Inference via `https://detect.roboflow.com/fruit-b2sy0/1`
+- Integration lives in `backend/services/fruit_detection.py`
+- Exposed through `POST /detection/fruits` (multipart image upload)
+
+## App features (to build)
+- Camera → identify products (Roboflow)
+- Spaces: fridge, pantry, etc. per household
+- Expiration date tracking and renewal flow
+- Product history and statistics (expired count, total stock, etc.)
+- Fruit/vegetable freshness detection from photos
+- Auto stock update when products are added/removed from spaces
