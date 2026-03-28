@@ -49,6 +49,16 @@ class CatalogItemRepository:
         )
         return response.data
 
+    def find_by_name(self, name: str) -> dict | None:
+        response = (
+            self._db.table(TABLE)
+            .select("*")
+            .ilike("name", f"%{name}%")
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
     # ------------------------------------------------------------------
     # Fruits / Vegetables  (barcode IS NULL)
     # ------------------------------------------------------------------

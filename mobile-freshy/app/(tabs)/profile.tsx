@@ -8,6 +8,7 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppHeader from '@/components/AppHeader';
 
 // ------- Types -------
 type SettingRowProps = {
@@ -33,12 +34,6 @@ const USER = {
 const HOUSEHOLD_MEMBERS = [
   { name: 'Catalina', emoji: '👩‍🍳', role: 'Admin' },
   { name: 'Marcos', emoji: '👨', role: 'Miembro' },
-];
-
-const SPACES = [
-  { label: 'Heladera', emoji: '🧊' },
-  { label: 'Alacena', emoji: '🗄️' },
-  { label: 'Congelados', emoji: '❄️' },
 ];
 
 // ------- Sub-components -------
@@ -73,9 +68,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>freshy</Text>
-      </View>
+      <AppHeader />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
@@ -97,8 +90,8 @@ export default function ProfileScreen() {
         <SectionCard>
           <SettingRow
             iconName="home-outline"
-            iconColor="#D4827A"
-            iconBg="#FAE8E6"
+            iconColor="#A8CFEE"
+            iconBg="#D6EEF8"
             label={USER.household}
             sublabel="Hogar principal"
             onPress={() => {}}
@@ -129,30 +122,8 @@ export default function ProfileScreen() {
           ))}
           <View style={styles.divider} />
           <TouchableOpacity style={styles.addBtn}>
-            <Ionicons name="person-add-outline" size={16} color="#D4827A" />
+            <Ionicons name="person-add-outline" size={16} color="#A8CFEE" />
             <Text style={styles.addBtnText}>Invitar miembro</Text>
-          </TouchableOpacity>
-        </SectionCard>
-
-        {/* Espacios */}
-        <Text style={styles.sectionTitle}>Espacios</Text>
-        <SectionCard>
-          {SPACES.map((s, idx) => (
-            <View key={s.label}>
-              <SettingRow
-                iconName="cube-outline"
-                iconColor="#4ABCB0"
-                iconBg="#E8F8F7"
-                label={s.label}
-                right={<Text style={styles.spaceEmoji}>{s.emoji}</Text>}
-              />
-              {idx < SPACES.length - 1 && <View style={styles.divider} />}
-            </View>
-          ))}
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.addBtn}>
-            <Ionicons name="add-circle-outline" size={16} color="#4ABCB0" />
-            <Text style={[styles.addBtnText, { color: '#4ABCB0' }]}>Agregar espacio</Text>
           </TouchableOpacity>
         </SectionCard>
 
@@ -169,7 +140,7 @@ export default function ProfileScreen() {
               <Switch
                 value={notifVencimiento}
                 onValueChange={setNotifVencimiento}
-                trackColor={{ false: '#DDD', true: '#D4827A' }}
+                trackColor={{ false: '#DDD', true: '#A8CFEE' }}
                 thumbColor="#fff"
               />
             }
@@ -185,7 +156,7 @@ export default function ProfileScreen() {
               <Switch
                 value={notifSemanal}
                 onValueChange={setNotifSemanal}
-                trackColor={{ false: '#DDD', true: '#D4827A' }}
+                trackColor={{ false: '#DDD', true: '#A8CFEE' }}
                 thumbColor="#fff"
               />
             }
@@ -226,13 +197,6 @@ export default function ProfileScreen() {
 // ------- Styles -------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F5' },
-  header: {
-    backgroundColor: '#D4827A',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: { color: '#fff', fontSize: 28, fontWeight: '800', fontStyle: 'italic' },
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 48 },
 
@@ -241,12 +205,12 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#FAE8E6',
+    backgroundColor: '#D6EEF8',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
     borderWidth: 3,
-    borderColor: '#D4827A',
+    borderColor: '#A8CFEE',
   },
   avatarEmoji: { fontSize: 44 },
   userName: { fontSize: 22, fontWeight: '800', color: '#1A1A1A' },
@@ -254,12 +218,12 @@ const styles = StyleSheet.create({
   memberSince: { fontSize: 12, color: '#AAA', marginTop: 4, marginBottom: 12 },
   editProfileBtn: {
     borderWidth: 1.5,
-    borderColor: '#D4827A',
+    borderColor: '#A8CFEE',
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 6,
   },
-  editProfileText: { fontSize: 14, color: '#D4827A', fontWeight: '600' },
+  editProfileText: { fontSize: 14, color: '#A8CFEE', fontWeight: '600' },
 
   sectionTitle: {
     fontSize: 13,
@@ -313,13 +277,11 @@ const styles = StyleSheet.create({
   memberInfo: { flex: 1 },
   memberName: { fontSize: 15, fontWeight: '600', color: '#1A1A1A' },
   memberRole: { fontSize: 12, color: '#999' },
-  adminBadge: { backgroundColor: '#FAE8E6', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 3 },
-  adminBadgeText: { fontSize: 12, fontWeight: '700', color: '#D4827A' },
+  adminBadge: { backgroundColor: '#D6EEF8', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 3 },
+  adminBadgeText: { fontSize: 12, fontWeight: '700', color: '#A8CFEE' },
 
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 13 },
-  addBtnText: { fontSize: 14, fontWeight: '600', color: '#D4827A' },
-
-  spaceEmoji: { fontSize: 22 },
+  addBtnText: { fontSize: 14, fontWeight: '600', color: '#A8CFEE' },
 
   logoutBtn: {
     flexDirection: 'row',
@@ -330,7 +292,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#fff',
     borderWidth: 1.5,
-    borderColor: '#F5C0BC',
+    borderColor: '#C5E0F5',
     marginTop: 4,
   },
   logoutText: { fontSize: 15, fontWeight: '700', color: '#C0392B' },

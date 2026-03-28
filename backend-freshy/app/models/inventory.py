@@ -13,6 +13,24 @@ class DetectedItemInput(BaseModel):
 class AddDetectedItemsRequest(BaseModel):
     storage_area_id: UUID
     items: list[DetectedItemInput]
+class InventoryCreate(BaseModel):
+    storage_area_id: UUID
+    product_name: str
+    product_brand: str | None = None
+    product_category: str | None = None
+    barcode: str | None = None
+    emoji: str | None = None
+    quantity: int = 1
+    unit: str = "unit"
+    expiry_date: date | None = None
+
+
+class InventoryCreateResponse(BaseModel):
+    id: UUID
+    catalog_item_id: UUID
+    storage_area_id: UUID
+    quantity: int
+    expiry_date: date | None
 
 
 class InventoryItemResponse(BaseModel):

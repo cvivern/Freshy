@@ -1,55 +1,97 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  StyleSheet,
+  ActivityIndicator,
   ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
   View,
-  Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppHeader from '@/components/AppHeader';
+import { fetchInventory, DEFAULT_USER_ID, DEFAULT_STORAGE_AREA_ID } from '@/services/api';
+import type { InventoryItemResponse } from '@/services/api';
+
+// ------- Config -------
+const USER_ID = DEFAULT_USER_ID;
+const STORAGE_AREA_ID = DEFAULT_STORAGE_AREA_ID;
 
 // ------- Types -------
 type StockItem = {
-  id: number;
+  id: string;
   emoji: string;
   name: string;
   brand: string;
   space: string;
   expiryDate: string;  // 'DD/MM/YYYY'
-  daysLeft: number;    // negativo = vencido
+  daysLeft: number;    // negative = expired — kept for progress bar
   shelfLife: number;
+  estado: 'fresco' | 'por_vencer' | 'vencido';
 };
 
-// ------- Mock Data -------
-// TODO: reemplazar con query a Supabase: inventory join storage_areas join catalog_items
-const MOCK_STOCK: StockItem[] = [
-  { id: 1, emoji: '🍗', name: 'Pechuga de pollo', brand: 'Granja del Sol', space: 'Heladera', expiryDate: '27/03/2026', daysLeft: -1, shelfLife: 3 },
-  { id: 2, emoji: '🧀', name: 'Queso cremoso', brand: 'La Serenísima', space: 'Heladera', expiryDate: '05/04/2026', daysLeft: 8, shelfLife: 20 },
-  { id: 3, emoji: '🥛', name: 'Yogur frutilla', brand: 'Danone', space: 'Heladera', expiryDate: '31/03/2026', daysLeft: 3, shelfLife: 14 },
-  { id: 4, emoji: '🥫', name: 'Atún enlatado', brand: 'Albo', space: 'Alacena', expiryDate: '10/06/2027', daysLeft: 440, shelfLife: 730 },
-  { id: 5, emoji: '🍝', name: 'Fideos tallarines', brand: 'Matarazzo', space: 'Alacena', expiryDate: '15/01/2027', daysLeft: 293, shelfLife: 365 },
-  { id: 6, emoji: '🍕', name: 'Pizza congelada', brand: 'Vizzio', space: 'Congelados', expiryDate: '01/04/2026', daysLeft: 4, shelfLife: 90 },
-  { id: 7, emoji: '🍦', name: 'Helado vainilla', brand: 'Frigor', space: 'Congelados', expiryDate: '28/03/2026', daysLeft: 0, shelfLife: 180 },
-];
-
 // ------- Helpers -------
-function getStatus(daysLeft: number): {
+function calcDaysLeft(fechaVencimiento: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiry = new Date(fechaVencimiento);
+  expiry.setHours(0, 0, 0, 0);
+  return Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function formatDate(fechaVencimiento: string): string {
+  const [year, month, day] = fechaVencimiento.split('-');
+  return `${day}/${month}/${year}`;
+}
+
+function shelfLifeFromEstado(estado: InventoryItemResponse['estado']): number {
+  if (estado === 'vencido') return 7;
+  if (estado === 'por_vencer') return 30;
+  return 365;
+}
+
+function mapToStockItem(item: InventoryItemResponse): StockItem {
+  const daysLeft =
+    item.fecha_vencimiento != null
+      ? calcDaysLeft(item.fecha_vencimiento)
+      : item.estado === 'fresco'
+      ? 999
+      : item.estado === 'por_vencer'
+      ? 7
+      : -1;
+
+    
+  console.log(`Mapping item ${JSON.stringify(item)}`);
+
+  return {
+    id: item.id,
+    emoji: item.emoji ?? '📦',
+    name: item.nombre,
+    brand: item.marca ?? '',
+    space: item.categoria ?? 'General',
+    expiryDate: item.fecha_vencimiento ? formatDate(item.fecha_vencimiento) : 'Sin fecha',
+    daysLeft,
+    shelfLife: shelfLifeFromEstado(item.estado),
+    estado: item.estado,
+  };
+}
+
+function getStatus(estado: StockItem['estado']): {
   label: string;
   bg: string;
   textColor: string;
   borderColor: string;
 } {
-  if (daysLeft < 0) return { label: 'Vencido', bg: '#FDDEDE', textColor: '#C0392B', borderColor: '#E07070' };
-  if (daysLeft <= 30) return { label: daysLeft === 0 ? 'Vence hoy' : `Vence en ${daysLeft}d`, bg: '#FFF3CD', textColor: '#996600', borderColor: '#E0C050' };
-  return { label: 'En buen estado', bg: '#DFF5E3', textColor: '#27AE60', borderColor: '#60B870' };
+  if (estado === 'vencido')    return { label: 'Vencido',        bg: '#FDDEDE', textColor: '#C0392B', borderColor: '#E07070' };
+  if (estado === 'por_vencer') return { label: 'Por vencer',     bg: '#FFF3CD', textColor: '#996600', borderColor: '#E0C050' };
+  return                              { label: 'En buen estado',  bg: '#DFF5E3', textColor: '#27AE60', borderColor: '#60B870' };
 }
 
 function calcStats(items: StockItem[]) {
   return {
-    total: items.length,
-    vencidos: items.filter((i) => i.daysLeft < 0).length,
-    porVencer: items.filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30).length,
-    bienEstado: items.filter((i) => i.daysLeft > 30).length,
+    total:      items.length,
+    vencidos:   items.filter((i) => i.estado === 'vencido').length,
+    porVencer:  items.filter((i) => i.estado === 'por_vencer').length,
+    bienEstado: items.filter((i) => i.estado === 'fresco').length,
   };
 }
 
@@ -76,7 +118,7 @@ function StatCard({
 }
 
 function ProductCard({ item }: { item: StockItem }) {
-  const status = getStatus(item.daysLeft);
+  const status = getStatus(item.estado);
   const progress = Math.min(1, Math.max(0, (item.shelfLife - item.daysLeft) / item.shelfLife));
   return (
     <View style={[styles.productCard, { borderColor: status.borderColor }]}>
@@ -86,11 +128,14 @@ function ProductCard({ item }: { item: StockItem }) {
           <Text style={styles.spaceChipText}>{item.space}</Text>
         </View>
       </View>
+
       <Text style={styles.productName}>{item.name}</Text>
-      <Text style={styles.productBrand}>{item.brand}</Text>
+      {!!item.brand && <Text style={styles.productBrand}>{item.brand}</Text>}
+
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: status.borderColor }]} />
       </View>
+
       <View style={styles.productFooter}>
         <View>
           <Text style={styles.expiryLabel}>Vencimiento</Text>
@@ -107,13 +152,34 @@ function ProductCard({ item }: { item: StockItem }) {
 // ------- Main Screen -------
 export default function StockScreen() {
   const [activeFilter, setActiveFilter] = useState<'todos' | 'buen_estado' | 'por_vencer' | 'vencidos'>('todos');
-  const stats = calcStats(MOCK_STOCK);
+  const [items, setItems] = useState<StockItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = MOCK_STOCK.filter((item) => {
-    if (activeFilter === 'todos') return true;
-    if (activeFilter === 'vencidos') return item.daysLeft < 0;
-    if (activeFilter === 'por_vencer') return item.daysLeft >= 0 && item.daysLeft <= 30;
-    if (activeFilter === 'buen_estado') return item.daysLeft > 30;
+  async function loadInventory() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchInventory(USER_ID, STORAGE_AREA_ID);
+      setItems(data.map(mapToStockItem));
+    } catch (e: any) {
+      setError(e.message ?? 'Error al cargar el inventario');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  const stats = calcStats(items);
+
+  const filtered = items.filter((item) => {
+    if (activeFilter === 'todos')       return true;
+    if (activeFilter === 'vencidos')    return item.estado === 'vencido';
+    if (activeFilter === 'por_vencer')  return item.estado === 'por_vencer';
+    if (activeFilter === 'buen_estado') return item.estado === 'fresco';
     return true;
   });
 
@@ -126,9 +192,7 @@ export default function StockScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>freshy</Text>
-      </View>
+      <AppHeader />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>Resumen del hogar</Text>
@@ -156,7 +220,16 @@ export default function StockScreen() {
           ))}
         </ScrollView>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadInventory}>
+              <Text style={styles.retryText}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filtered.length === 0 ? (
           <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
         ) : (
           filtered.map((item) => <ProductCard key={item.id} item={item} />)
@@ -169,43 +242,74 @@ export default function StockScreen() {
 // ------- Styles -------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  header: {
-    backgroundColor: '#D4827A',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: { color: '#fff', fontSize: 28, fontWeight: '800', fontStyle: 'italic' },
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 14, marginTop: 4 },
 
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
-  statCard: { width: '47%', borderWidth: 1.5, borderRadius: 14, padding: 14, backgroundColor: '#fff', alignItems: 'flex-start', gap: 6 },
-  statIconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 28,
+  },
+  statCard: {
+    width: '47%',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: '#fff',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  statIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
   statValue: { fontSize: 28, fontWeight: '800', color: '#1A1A1A', lineHeight: 32 },
   statLabel: { fontSize: 12, color: '#666', lineHeight: 16 },
 
   filtersScroll: { marginBottom: 16 },
   filtersContent: { gap: 8, paddingRight: 4 },
   filterChip: { borderWidth: 1.5, borderColor: '#CCC', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, backgroundColor: '#fff' },
-  filterChipActive: { backgroundColor: '#D4827A', borderColor: '#D4827A' },
+  filterChipActive: { backgroundColor: '#A8CFEE', borderColor: '#A8CFEE' },
   filterChipText: { fontSize: 14, color: '#555', fontWeight: '500' },
   filterChipTextActive: { color: '#fff', fontWeight: '700' },
 
-  productCard: { backgroundColor: '#fff', borderWidth: 2, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12 },
-  productTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  productCard: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  productTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
   productEmoji: { fontSize: 36 },
   spaceChip: { backgroundColor: '#F0F0F0', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
   spaceChipText: { fontSize: 12, color: '#555', fontWeight: '600' },
   productName: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 2 },
   productBrand: { fontSize: 13, color: '#4ABCB0', marginBottom: 10, fontWeight: '500' },
   progressTrack: { height: 8, backgroundColor: '#E0E0E0', borderRadius: 4, marginBottom: 12, overflow: 'hidden' },
-  progressFill: { height: 8, borderRadius: 4 },
+  progressFill: { height: 8, backgroundColor: '#4ABCB0', borderRadius: 4 },
   productFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   expiryLabel: { fontSize: 12, color: '#888', marginBottom: 2 },
   expiryDate: { fontSize: 15, fontWeight: '700', color: '#222' },
   statusBadge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   statusText: { fontSize: 13, fontWeight: '700' },
+
+  loader: { marginTop: 40 },
+  errorContainer: { alignItems: 'center', marginTop: 40, gap: 12 },
+  errorText: { color: '#C0392B', fontSize: 14, textAlign: 'center' },
+  retryButton: { backgroundColor: '#A8CFEE', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 },
+  retryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   emptyText: { textAlign: 'center', color: '#888', fontSize: 15, marginTop: 30 },
 });

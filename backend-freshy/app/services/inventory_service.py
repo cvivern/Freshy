@@ -1,17 +1,56 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
 
 from app.models.inventory import AddDetectedItemsRequest, InventoryItemResponse
+from app.models.inventory import InventoryCreate, InventoryCreateResponse, InventoryItemResponse, AddDetectedItemsRequest
 from app.repositories.catalog_item_repository import CatalogItemRepository
 from app.repositories.inventory_repository import InventoryRepository
 
 
 class InventoryService:
-    def __init__(self, repo: InventoryRepository, catalog_repo: CatalogItemRepository) -> None:
+    def __init__(self, repo: InventoryRepository, catalog_repo: CatalogItemRepository | None = None) -> None:
         self._repo = repo
         self._catalog_repo = catalog_repo
+
+    def add_item(self, data: InventoryCreate) -> InventoryCreateResponse:
+        if self._catalog_repo is None:
+            raise HTTPException(status_code=500, detail="catalog_repo not configured")
+
+        # Find or create the catalog item
+        catalog_item: dict | None = None
+        if data.barcode:
+            catalog_item = self._catalog_repo.get_product_by_barcode(data.barcode)
+        if catalog_item is None:
+            catalog_item = self._catalog_repo.find_by_name(data.product_name)
+        if catalog_item is None:
+            catalog_item = self._catalog_repo.create({
+                "name": data.product_name,
+                "marca": data.product_brand,
+                "category": data.product_category,
+                "barcode": data.barcode,
+                "emoji": data.emoji,
+                "est_shelf_life_days": 7,
+            })
+
+        row = self._repo.create({
+            "storage_area_id": str(data.storage_area_id),
+            "catalog_item_id": catalog_item["id"],
+            "quantity": data.quantity,
+            "unit": data.unit,
+            "entry_date": date.today().isoformat(),
+            "expiry_date": data.expiry_date.isoformat() if data.expiry_date else None,
+            "freshness_state": "fresco",
+        })
+
+        return InventoryCreateResponse(
+            id=row["id"],
+            catalog_item_id=row["catalog_item_id"],
+            storage_area_id=row["storage_area_id"],
+            quantity=row["quantity"],
+            expiry_date=row.get("expiry_date"),
+        )
 
     def get_inventory(
         self,
@@ -82,17 +121,25 @@ class InventoryService:
     @staticmethod
     def _map_row(row: dict) -> InventoryItemResponse:
         catalog = row.get("catalog_items") or {}
+        logs: list[dict] = row.get("history_logs") or []
+
+        last_used: datetime | None = None
+        if logs:
+            timestamps = [
+                datetime.fromisoformat(log["created_at"])
+                for log in logs
+                if log.get("created_at")
+            ]
+            last_used = max(timestamps) if timestamps else None
 
         return InventoryItemResponse(
             id=row["id"],
             nombre=catalog.get("name", ""),
             marca=catalog.get("marca"),
             emoji=catalog.get("emoji"),
-            foto=None,  # foto_url not present in inventory table
+            foto=row.get("foto_url") or catalog.get("image_url"),
             categoria=catalog.get("category"),
-            # DB uses expiry_date / freshness_state; API surface keeps Spanish names.
             fecha_vencimiento=row.get("expiry_date"),
             estado=row.get("freshness_state", "fresco"),
-            # history_logs has no FK to inventory in the current schema.
-            last_used=None,
+            last_used=last_used,
         )

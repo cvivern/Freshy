@@ -7,6 +7,7 @@ import {
   Text,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppHeader from '@/components/AppHeader';
 
 // ------- Types -------
 type Period = 'semana' | 'mes' | 'total';
@@ -213,9 +214,7 @@ export default function StatsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>freshy</Text>
-      </View>
+      <AppHeader />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {/* Period selector */}
@@ -252,13 +251,6 @@ export default function StatsScreen() {
 // ------- Styles -------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  header: {
-    backgroundColor: '#D4827A',
-    paddingTop: 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-  },
-  headerTitle: { color: '#fff', fontSize: 28, fontWeight: '800', fontStyle: 'italic' },
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
 
@@ -271,7 +263,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     alignItems: 'center',
   },
-  periodChipActive: { backgroundColor: '#D4827A', borderColor: '#D4827A' },
+  periodChipActive: { backgroundColor: '#A8CFEE', borderColor: '#A8CFEE' },
   periodChipText: { fontSize: 13, color: '#555', fontWeight: '500' },
   periodChipTextActive: { color: '#fff', fontWeight: '700' },
 

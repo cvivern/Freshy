@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.supabase import get_supabase_client
-from app.models.inventory import AddDetectedItemsRequest, InventoryItemResponse
+from app.models.inventory import InventoryCreate, InventoryCreateResponse, InventoryItemResponse, AddDetectedItemsRequest
 from app.repositories.catalog_item_repository import CatalogItemRepository
 from app.repositories.inventory_repository import InventoryRepository
 from app.services.inventory_service import InventoryService
@@ -25,6 +25,19 @@ def get_inventory_service() -> InventoryService:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@router.post(
+    "/",
+    response_model=InventoryCreateResponse,
+    status_code=201,
+    summary="Add an item to inventory (find-or-create catalog entry)",
+)
+def add_inventory_item(
+    body: InventoryCreate,
+    service: InventoryService = Depends(get_inventory_service),
+):
+    return service.add_item(body)
+
 
 @router.get(
     "/",
