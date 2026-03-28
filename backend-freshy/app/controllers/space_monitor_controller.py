@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.services.space_monitor_service import (
     analyze_space_change,
+    broadcast_monitor_event,
     decrement_inventory,
     increment_inventory,
     register_removal,
@@ -47,12 +48,10 @@ async def analyze_frames(req: AnalyzeFramesRequest):
 
         if req.auto_register and confianza > 0.55:
             if accion == "salida":
-                # Decrement inventory if we have an exact match
                 if item_id:
                     new_qty = await decrement_inventory(item_id, cantidad)
                     result["cantidad_restante"] = new_qty
 
-                # Register removal event (for the "not returned" timer)
                 removal = await register_removal(
                     storage_area_id=req.storage_area_id,
                     product_name=result.get("producto_nombre", "producto"),
@@ -63,9 +62,23 @@ async def analyze_frames(req: AnalyzeFramesRequest):
                 result["removal_id"] = removal.get("id")
 
             elif accion == "entrada" and item_id:
-                # Increment inventory on return/addition
                 new_qty = await increment_inventory(item_id, cantidad)
                 result["cantidad_restante"] = new_qty
+
+            # ── Broadcast via Supabase Realtime → celular recibe el toast ──
+            if accion in ("salida", "entrada"):
+                await broadcast_monitor_event(
+                    user_id=req.user_id,
+                    storage_area_id=req.storage_area_id,
+                    accion=accion,
+                    producto_nombre=result.get("producto_nombre", "producto"),
+                    producto_emoji=result.get("producto_emoji", "📦"),
+                    cantidad=cantidad,
+                    cantidad_restante=result.get("cantidad_restante"),
+                    inventory_item_id=item_id,
+                    confianza=confianza,
+                    descripcion=result.get("descripcion", ""),
+                )
 
         return result
     except Exception as e:

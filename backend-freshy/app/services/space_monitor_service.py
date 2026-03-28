@@ -170,6 +170,40 @@ async def increment_inventory(inventory_item_id: str, cantidad: int = 1) -> int:
     return new_qty
 
 
+async def broadcast_monitor_event(
+    user_id: str,
+    storage_area_id: str,
+    accion: str,
+    producto_nombre: str,
+    producto_emoji: str,
+    cantidad: int,
+    cantidad_restante: int | None,
+    inventory_item_id: str | None,
+    confianza: float,
+    descripcion: str,
+) -> None:
+    """
+    Inserts a row in monitor_events so any subscribed mobile client
+    receives it instantly via Supabase Realtime.
+    """
+    try:
+        supabase = _get_supabase()
+        supabase.table("monitor_events").insert({
+            "user_id":            user_id,
+            "storage_area_id":    storage_area_id,
+            "accion":             accion,
+            "producto_nombre":    producto_nombre,
+            "producto_emoji":     producto_emoji,
+            "inventory_item_id":  inventory_item_id,
+            "cantidad":           cantidad,
+            "cantidad_restante":  cantidad_restante,
+            "confianza":          confianza,
+            "descripcion":        descripcion,
+        }).execute()
+    except Exception:
+        pass  # Never block the main flow
+
+
 async def register_removal(
     storage_area_id: str,
     product_name: str,

@@ -17,6 +17,7 @@ import React from 'react';
 import { View } from 'react-native';
 import { API_BASE } from '@/services/api';
 import { useMonitor } from '@/contexts/MonitorContext';
+import { supabase } from '@/services/supabase';
 
 const CAPTURE_INTERVAL_MS = 3000;   // take photo every 3 seconds
 const MOTION_THRESHOLD    = 0.04;   // 4% pixel difference = motion
@@ -191,6 +192,55 @@ export function useSpaceMonitor({
       requestPermission();
     }
   }, [permission]);
+
+  // ── Supabase Realtime: escucha eventos del PC u otros dispositivos ──
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`monitor_events:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event:  'INSERT',
+          schema: 'public',
+          table:  'monitor_events',
+          filter: `user_id=eq.${userId}`,
+        },
+        async (payload) => {
+          const row = payload.new as any;
+          if (!row || !row.accion) return;
+
+          const emoji     = row.producto_emoji ?? '📦';
+          const nombre    = row.producto_nombre ?? 'producto';
+          const remaining = row.cantidad_restante ?? null;
+
+          // Mostrar toast en pantalla
+          showMonitorToast({
+            accion:            row.accion,
+            producto_nombre:   nombre,
+            producto_emoji:    emoji,
+            cantidad_restante: remaining,
+          });
+
+          // Notificación push
+          if (row.accion === 'salida') {
+            if (remaining !== null && remaining <= 0) {
+              await sendNotification(`${emoji} Ya no tenés ${nombre}`, '¿Lo agregamos a la lista de compras?');
+            } else if (remaining !== null) {
+              const unit = remaining === 1 ? 'unidad' : 'unidades';
+              const verb = remaining === 1 ? 'queda' : 'quedan';
+              await sendNotification(`${emoji} Retiraste ${nombre}`, `Te ${verb} ${remaining} ${unit}`);
+            }
+          } else if (row.accion === 'entrada' && remaining !== null) {
+            await sendNotification(`${emoji} Agregaste ${nombre}`, `Ahora tenés ${remaining} ${remaining === 1 ? 'unidad' : 'unidades'}`);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, showMonitorToast]);
 
   // The invisible camera component — caller renders this hidden
   const MonitorCamera = useCallback(() => {
