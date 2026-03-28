@@ -22,8 +22,9 @@ type StockItem = {
   brand: string;
   space: string;       // category used as space chip
   expiryDate: string;  // 'DD/MM/YYYY'
-  daysLeft: number;    // negative = expired
+  daysLeft: number;    // negative = expired — kept for progress bar
   shelfLife: number;
+  estado: 'fresco' | 'por_vencer' | 'vencido';
 };
 
 // ------- Helpers -------
@@ -65,26 +66,27 @@ function mapToStockItem(item: InventoryItemResponse): StockItem {
     expiryDate: item.fecha_vencimiento ? formatDate(item.fecha_vencimiento) : 'Sin fecha',
     daysLeft,
     shelfLife: shelfLifeFromEstado(item.estado),
+    estado: item.estado,
   };
 }
 
-function getStatus(daysLeft: number): {
+function getStatus(estado: StockItem['estado']): {
   label: string;
   bg: string;
   textColor: string;
   borderColor: string;
 } {
-  if (daysLeft < 0) return { label: 'Vencido', bg: '#FDDEDE', textColor: '#C0392B', borderColor: '#E07070' };
-  if (daysLeft <= 30) return { label: daysLeft === 0 ? 'Vence hoy' : `Vence en ${daysLeft}d`, bg: '#FFF3CD', textColor: '#996600', borderColor: '#E0C050' };
-  return { label: 'En buen estado', bg: '#DFF5E3', textColor: '#27AE60', borderColor: '#60B870' };
+  if (estado === 'vencido')    return { label: 'Vencido',        bg: '#FDDEDE', textColor: '#C0392B', borderColor: '#E07070' };
+  if (estado === 'por_vencer') return { label: 'Por vencer',     bg: '#FFF3CD', textColor: '#996600', borderColor: '#E0C050' };
+  return                              { label: 'En buen estado',  bg: '#DFF5E3', textColor: '#27AE60', borderColor: '#60B870' };
 }
 
 function calcStats(items: StockItem[]) {
   return {
-    total: items.length,
-    vencidos: items.filter((i) => i.daysLeft < 0).length,
-    porVencer: items.filter((i) => i.daysLeft >= 0 && i.daysLeft <= 30).length,
-    bienEstado: items.filter((i) => i.daysLeft > 30).length,
+    total:      items.length,
+    vencidos:   items.filter((i) => i.estado === 'vencido').length,
+    porVencer:  items.filter((i) => i.estado === 'por_vencer').length,
+    bienEstado: items.filter((i) => i.estado === 'fresco').length,
   };
 }
 
@@ -111,7 +113,7 @@ function StatCard({
 }
 
 function ProductCard({ item }: { item: StockItem }) {
-  const status = getStatus(item.daysLeft);
+  const status = getStatus(item.estado);
   const progress = Math.min(1, Math.max(0, (item.shelfLife - item.daysLeft) / item.shelfLife));
   return (
     <View style={[styles.productCard, { borderColor: status.borderColor }]}>
@@ -169,10 +171,10 @@ export default function StockScreen() {
   const stats = calcStats(items);
 
   const filtered = items.filter((item) => {
-    if (activeFilter === 'todos') return true;
-    if (activeFilter === 'vencidos') return item.daysLeft < 0;
-    if (activeFilter === 'por_vencer') return item.daysLeft >= 0 && item.daysLeft <= 30;
-    if (activeFilter === 'buen_estado') return item.daysLeft > 30;
+    if (activeFilter === 'todos')       return true;
+    if (activeFilter === 'vencidos')    return item.estado === 'vencido';
+    if (activeFilter === 'por_vencer')  return item.estado === 'por_vencer';
+    if (activeFilter === 'buen_estado') return item.estado === 'fresco';
     return true;
   });
 
