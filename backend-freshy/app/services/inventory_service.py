@@ -1,15 +1,55 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from app.models.inventory import InventoryItemResponse
+from app.models.inventory import InventoryCreate, InventoryCreateResponse, InventoryItemResponse
+from app.repositories.catalog_item_repository import CatalogItemRepository
 from app.repositories.inventory_repository import InventoryRepository
 
 
 class InventoryService:
-    def __init__(self, repo: InventoryRepository) -> None:
+    def __init__(self, repo: InventoryRepository, catalog_repo: CatalogItemRepository | None = None) -> None:
         self._repo = repo
+        self._catalog_repo = catalog_repo
+
+    def add_item(self, data: InventoryCreate) -> InventoryCreateResponse:
+        if self._catalog_repo is None:
+            raise HTTPException(status_code=500, detail="catalog_repo not configured")
+
+        # Find or create the catalog item
+        catalog_item: dict | None = None
+        if data.barcode:
+            catalog_item = self._catalog_repo.get_product_by_barcode(data.barcode)
+        if catalog_item is None:
+            catalog_item = self._catalog_repo.find_by_name(data.product_name)
+        if catalog_item is None:
+            catalog_item = self._catalog_repo.create({
+                "name": data.product_name,
+                "marca": data.product_brand,
+                "category": data.product_category,
+                "barcode": data.barcode,
+                "emoji": data.emoji,
+                "est_shelf_life_days": 7,
+            })
+
+        row = self._repo.create({
+            "storage_area_id": str(data.storage_area_id),
+            "catalog_item_id": catalog_item["id"],
+            "quantity": data.quantity,
+            "unit": data.unit,
+            "entry_date": date.today().isoformat(),
+            "expiry_date": data.expiry_date.isoformat() if data.expiry_date else None,
+            "freshness_state": "fresco",
+        })
+
+        return InventoryCreateResponse(
+            id=row["id"],
+            catalog_item_id=row["catalog_item_id"],
+            storage_area_id=row["storage_area_id"],
+            quantity=row["quantity"],
+            expiry_date=row.get("expiry_date"),
+        )
 
     def get_inventory(
         self,
@@ -69,7 +109,7 @@ class InventoryService:
             emoji=catalog.get("emoji"),
             foto=row.get("foto_url") or catalog.get("image_url"),
             categoria=catalog.get("category"),
-            fecha_vencimiento=row.get("fecha_vencimiento"),
-            estado=row.get("estado", "fresco"),
+            fecha_vencimiento=row.get("expiry_date"),
+            estado=row.get("freshness_state", "fresco"),
             last_used=last_used,
         )

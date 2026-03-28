@@ -16,9 +16,17 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
-
-// ------- Config -------
-const API_BASE = 'https://backend-freshy.vercel.app';
+import {
+  API_BASE,
+  DEFAULT_STORAGE_AREA_ID,
+  addToInventory,
+  detectFrutaVerdura,
+  detectOtroProducto,
+  fetchInventoryItems,
+  scanBarcodeImage,
+  toISODate,
+} from '@/services/api';
+import type { BarcodeInfo, InventoryItem, ProductInfo } from '@/services/api';
 
 // ------- Types -------
 type ProductCategory = 'fruta_verdura' | 'otro';
@@ -32,15 +40,8 @@ type Phase =
   | 'detecting_barcode'  // procesando segunda foto (vision AI lee barcode+fecha)
   | 'barcode_popup';     // popup con datos leídos (editables) → guardar
 
-type AddTab = 'productos' | 'espacios' | 'hogares';
-type Space = { id: number; emoji: string; name: string };
-type Household = { id: number; name: string };
-type Detection = { label: string; confidence: number };
-type ProductInfo = { category: string; brand: string; name: string };
-type BarcodeInfo = { barcode: string; expiryDate: string };
-type FavoriteProduct = { id: number; emoji: string; name: string };
 type RestockState = {
-  product: FavoriteProduct;
+  product: InventoryItem;
   step: 'qty' | 'dates';
   qty: string;
   dates: string[];       // fechas ya ingresadas
@@ -48,96 +49,24 @@ type RestockState = {
   currentIndex: number;  // índice actual (0-based)
 };
 
-// ------- Label mapping (Roboflow fruit-b2sy0) -------
-const LABEL_MAP: Record<string, string> = {
-  apple_fresh:       'Manzana',
-  apple_rotten:      'Manzana (en mal estado)',
-  banana_fresh:      'Banana',
-  banana_rotten:     'Banana (en mal estado)',
-  orange_fresh:      'Naranja',
-  orange_rotten:     'Naranja (en mal estado)',
-  mango_fresh:       'Mango',
-  mango_rotten:      'Mango (en mal estado)',
-  strawberry_fresh:  'Frutilla',
-  strawberry_rotten: 'Frutilla (en mal estado)',
-  grapes_fresh:      'Uvas',
-  grapes_rotten:     'Uvas (en mal estado)',
-  watermelon_fresh:  'Sandía',
-  pineapple_fresh:   'Ananá',
-  lemon_fresh:       'Limón',
-};
+// ------- Tab types -------
+type AddTab = 'productos' | 'espacios' | 'hogares';
 
-function parseFruitDetections(detections: Detection[]): ProductInfo {
-  if (!detections.length) return { category: 'Frutas y verduras', brand: '—', name: 'No reconocido' };
-  const best = detections.reduce((a, b) => (a.confidence > b.confidence ? a : b));
-  const name = LABEL_MAP[best.label] ?? best.label.replace(/_/g, ' ');
-  return { category: 'Frutas y verduras', brand: '—', name };
-}
-
-// ------- API calls -------
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 30000): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    return response;
-  } catch (err: any) {
-    if (err?.name === 'AbortError') throw new Error('La solicitud tardó demasiado. Verificá que el backend esté corriendo.');
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function detectFrutaVerdura(uri: string): Promise<ProductInfo> {
-  const formData = new FormData();
-  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
-  const response = await fetchWithTimeout(`${API_BASE}/detection/fruits`, { method: 'POST', body: formData });
-  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
-  const data = await response.json();
-  return parseFruitDetections((data.detections ?? []) as Detection[]);
-}
-
-async function detectOtroProducto(uri: string): Promise<ProductInfo> {
-  const formData = new FormData();
-  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
-  const response = await fetchWithTimeout(`${API_BASE}/detection/scan/product`, { method: 'POST', body: formData });
-  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
-  const data = await response.json();
-  return {
-    category: 'Producto envasado',
-    brand: data.brand ?? '—',
-    name: data.name ?? '—',
-  };
-}
-
-async function scanBarcodeImage(uri: string): Promise<BarcodeInfo> {
-  const formData = new FormData();
-  formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
-  const response = await fetchWithTimeout(`${API_BASE}/detection/scan/barcode`, { method: 'POST', body: formData });
-  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
-  const data = await response.json();
-  return {
-    barcode: data.barcode ?? '',
-    expiryDate: data.expiry_date ?? '',
-  };
-}
-
-// ------- Mock Data -------
-const FAVORITE_PRODUCTS: FavoriteProduct[] = [
-  { id: 1, emoji: '🍞', name: 'Pan' },
-  { id: 2, emoji: '🧈', name: 'Manteca' },
-  { id: 3, emoji: '🍌', name: 'Banana' },
+const ADD_TABS: { key: AddTab; label: string }[] = [
+  { key: 'productos', label: 'Productos' },
+  { key: 'espacios', label: 'Espacios' },
+  { key: 'hogares', label: 'Hogares' },
 ];
 
-const INITIAL_SPACES: Space[] = [
+// ------- Mock Data for Espacios / Hogares -------
+const SPACES = [
   { id: 1, emoji: '🧊', name: 'Heladera' },
   { id: 2, emoji: '🗄️', name: 'Alacena' },
-  { id: 3, emoji: '❄️', name: 'Congelados' },
+  { id: 3, emoji: '🥶', name: 'Freezer' },
 ];
 
-const INITIAL_HOUSEHOLDS: Household[] = [
-  { id: 1, name: 'Casa de Cata' },
+const HOUSEHOLDS = [
+  { id: 1, emoji: '🏠', name: 'Casa de Cata', members: 2 },
 ];
 
 // ------- Main Screen -------
@@ -145,17 +74,22 @@ export default function AddScreen() {
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
 
+  const [activeTab, setActiveTab] = useState<AddTab>('productos');
   const [phase, setPhase] = useState<Phase>('select_type');
   const [category, setCategory] = useState<ProductCategory | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [productInfo, setProductInfo] = useState<ProductInfo>({ category: '', brand: '', name: '' });
   const [barcodeInfo, setBarcodeInfo] = useState<BarcodeInfo>({ barcode: '', expiryDate: '' });
   const [restock, setRestock] = useState<RestockState | null>(null);
-  const [addTab, setAddTab] = useState<AddTab>('productos');
-  const [spaces, setSpaces] = useState<Space[]>(INITIAL_SPACES);
-  const [households, setHouseholds] = useState<Household[]>(INITIAL_HOUSEHOLDS);
-  const [spaceModal, setSpaceModal] = useState<{ name: string; emoji: string } | null>(null);
-  const [householdModal, setHouseholdModal] = useState<{ name: string } | null>(null);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [loadingInventory, setLoadingInventory] = useState(true);
+
+  React.useEffect(() => {
+    fetchInventoryItems()
+      .then(setInventoryItems)
+      .catch(() => {})
+      .finally(() => setLoadingInventory(false));
+  }, []);
 
   function selectCategory(cat: ProductCategory) {
     setCategory(cat);
@@ -218,17 +152,30 @@ export default function AddScreen() {
     setPhase('barcode_popup');
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!barcodeInfo.expiryDate.trim()) {
       Alert.alert('Fecha requerida', 'Ingresá la fecha de vencimiento.');
       return;
     }
-    // TODO: insertar en Supabase tabla inventory
-    Alert.alert('¡Producto guardado!', `${productInfo.name} fue agregado a tu inventario.`);
-    reset();
+    try {
+      await addToInventory({
+        storage_area_id: DEFAULT_STORAGE_AREA_ID,
+        product_name: productInfo.name,
+        product_brand: productInfo.brand !== '—' ? productInfo.brand : undefined,
+        product_category: productInfo.category,
+        barcode: barcodeInfo.barcode || undefined,
+        quantity: 1,
+        expiry_date: toISODate(barcodeInfo.expiryDate),
+      });
+      Alert.alert('¡Producto guardado!', `${productInfo.name} fue agregado a tu inventario.`);
+      reset();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      Alert.alert('No se pudo guardar', msg);
+    }
   }
 
-  function openRestock(product: FavoriteProduct) {
+  function openRestock(product: InventoryItem) {
     setRestock({ product, step: 'qty', qty: '', dates: [], currentDate: '', currentIndex: 0 });
   }
 
@@ -242,7 +189,7 @@ export default function AddScreen() {
     setRestock((p) => p ? { ...p, step: 'dates', currentIndex: 0, currentDate: '' } : p);
   }
 
-  function handleRestockDateNext() {
+  async function handleRestockDateNext() {
     if (!restock) return;
     if (!restock.currentDate.trim()) {
       Alert.alert('Fecha requerida', 'Ingresá la fecha de vencimiento.');
@@ -251,9 +198,25 @@ export default function AddScreen() {
     const total = parseInt(restock.qty, 10);
     const newDates = [...restock.dates, restock.currentDate];
     if (newDates.length >= total) {
-      // TODO: insertar en Supabase tabla inventory (newDates.length entradas)
-      Alert.alert('¡Restock guardado!', `${total} ${restock.product.name} agregados al inventario.`);
-      setRestock(null);
+      try {
+        await Promise.all(
+          newDates.map((expiry) =>
+            addToInventory({
+              storage_area_id: DEFAULT_STORAGE_AREA_ID,
+              product_name: restock.product.nombre,
+              product_brand: restock.product.marca ?? undefined,
+              emoji: restock.product.emoji ?? undefined,
+              quantity: 1,
+              expiry_date: toISODate(expiry),
+            })
+          )
+        );
+        Alert.alert('¡Restock guardado!', `${total} ${restock.product.nombre} agregados al inventario.`);
+        setRestock(null);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error desconocido';
+        Alert.alert('No se pudo guardar', msg);
+      }
     } else {
       setRestock((p) => p ? { ...p, dates: newDates, currentDate: '', currentIndex: p.currentIndex + 1 } : p);
     }
@@ -443,20 +406,6 @@ export default function AddScreen() {
     );
   }
 
-  function handleAddSpace() {
-    if (!spaceModal) return;
-    if (!spaceModal.name.trim()) { Alert.alert('Nombre requerido', 'Ingresá un nombre para el espacio.'); return; }
-    setSpaces((prev) => [...prev, { id: Date.now(), emoji: spaceModal.emoji.trim() || '📦', name: spaceModal.name.trim() }]);
-    setSpaceModal(null);
-  }
-
-  function handleAddHousehold() {
-    if (!householdModal) return;
-    if (!householdModal.name.trim()) { Alert.alert('Nombre requerido', 'Ingresá un nombre para el hogar.'); return; }
-    setHouseholds((prev) => [...prev, { id: Date.now(), name: householdModal.name.trim() }]);
-    setHouseholdModal(null);
-  }
-
   // ================================================================
   // SELECT TYPE (pantalla principal)
   // ================================================================
@@ -464,17 +413,16 @@ export default function AddScreen() {
     <View style={styles.container}>
       <AppHeader />
 
-      {/* Tab bar */}
+      {/* ---- 3-tab bar: Productos / Espacios / Hogares ---- */}
       <View style={styles.tabBar}>
-        {(['productos', 'espacios', 'hogares'] as AddTab[]).map((t) => (
+        {ADD_TABS.map((tab) => (
           <TouchableOpacity
-            key={t}
-            style={[styles.tabBtn, addTab === t && styles.tabBtnActive]}
-            onPress={() => setAddTab(t)}
-            activeOpacity={0.75}
+            key={tab.key}
+            style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
+            onPress={() => setActiveTab(tab.key)}
           >
-            <Text style={[styles.tabBtnText, addTab === t && styles.tabBtnTextActive]}>
-              {t === 'productos' ? 'Productos' : t === 'espacios' ? 'Espacios' : 'Hogares'}
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              {tab.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -482,8 +430,8 @@ export default function AddScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
 
-        {/* ── TAB: PRODUCTOS ── */}
-        {addTab === 'productos' && (
+        {/* ---- Productos tab ---- */}
+        {activeTab === 'productos' && (
           <>
             <Text style={styles.sectionTitle}>¿Qué vas a agregar?</Text>
             <Text style={styles.sectionSubtitle}>Elegí el tipo de producto para que la IA use el análisis correcto.</Text>
@@ -516,133 +464,70 @@ export default function AddScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            <Text style={styles.description}>Tus productos favoritos — agregálos rápido sin escanear.</Text>
-            {FAVORITE_PRODUCTS.map((product) => (
-              <View key={product.id} style={styles.productRow}>
-                <Text style={styles.productEmoji}>{product.emoji}</Text>
-                <Text style={styles.productName}>{product.name}</Text>
-                <TouchableOpacity style={styles.addButton} onPress={() => openRestock(product)}>
-                  <Ionicons name="add" size={22} color="#fff" />
-                </TouchableOpacity>
+            <Text style={styles.description}>Tus productos en stock — agregá más unidades rápido.</Text>
+            {loadingInventory ? (
+              <ActivityIndicator size="small" color="#888" style={{ marginTop: 12 }} />
+            ) : inventoryItems.length === 0 ? (
+              <Text style={{ color: '#AAA', textAlign: 'center', marginTop: 12 }}>
+                No hay productos en el inventario todavía.
+              </Text>
+            ) : (
+              inventoryItems.map((product) => (
+                <View key={product.id} style={styles.productRow}>
+                  <Text style={styles.productEmoji}>{product.emoji ?? '📦'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.productName}>{product.nombre}</Text>
+                    {product.marca ? <Text style={{ color: '#AAA', fontSize: 12 }}>{product.marca}</Text> : null}
+                  </View>
+                  <TouchableOpacity style={styles.addButton} onPress={() => openRestock(product)}>
+                    <Ionicons name="add" size={22} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </>
+        )}
+
+        {/* ---- Espacios tab ---- */}
+        {activeTab === 'espacios' && (
+          <>
+            <Text style={styles.sectionTitle}>Espacios de almacenamiento</Text>
+            <Text style={styles.sectionSubtitle}>Organizá tus productos por área del hogar.</Text>
+            {SPACES.map((space) => (
+              <View key={space.id} style={styles.categoryCard}>
+                <View style={[styles.categoryIconWrap, { backgroundColor: '#E8F4FF' }]}>
+                  <Text style={styles.categoryEmoji}>{space.emoji}</Text>
+                </View>
+                <View style={styles.categoryInfo}>
+                  <Text style={styles.categoryTitle}>{space.name}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#CCC" />
               </View>
             ))}
           </>
         )}
 
-        {/* ── TAB: ESPACIOS ── */}
-        {addTab === 'espacios' && (
+        {/* ---- Hogares tab ---- */}
+        {activeTab === 'hogares' && (
           <>
-            <Text style={styles.sectionTitle}>Tus espacios</Text>
-            <Text style={styles.sectionSubtitle}>Los espacios donde guardás tus productos (heladera, alacena, etc.).</Text>
-
-            {spaces.map((s, idx) => (
-              <View key={s.id} style={[styles.listCard, idx === spaces.length - 1 && { marginBottom: 0 }]}>
-                <View style={styles.listCardIcon}>
-                  <Text style={styles.listCardEmoji}>{s.emoji}</Text>
+            <Text style={styles.sectionTitle}>Mis hogares</Text>
+            <Text style={styles.sectionSubtitle}>Gestioná los hogares en los que participás.</Text>
+            {HOUSEHOLDS.map((hh) => (
+              <View key={hh.id} style={styles.categoryCard}>
+                <View style={[styles.categoryIconWrap, { backgroundColor: '#F0F0F0' }]}>
+                  <Text style={styles.categoryEmoji}>{hh.emoji}</Text>
                 </View>
-                <Text style={styles.listCardName}>{s.name}</Text>
+                <View style={styles.categoryInfo}>
+                  <Text style={styles.categoryTitle}>{hh.name}</Text>
+                  <Text style={styles.categorySubtitle}>{hh.members} miembros</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#CCC" />
               </View>
             ))}
-
-            <TouchableOpacity style={styles.outlineBtn} onPress={() => setSpaceModal({ name: '', emoji: '' })} activeOpacity={0.8}>
-              <Ionicons name="add-circle-outline" size={18} color="#4ABCB0" />
-              <Text style={[styles.outlineBtnText, { color: '#4ABCB0' }]}>Agregar espacio</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* ── TAB: HOGARES ── */}
-        {addTab === 'hogares' && (
-          <>
-            <Text style={styles.sectionTitle}>Tus hogares</Text>
-            <Text style={styles.sectionSubtitle}>Podés pertenecer a varios hogares y cambiar entre ellos.</Text>
-
-            {households.map((h, idx) => (
-              <View key={h.id} style={[styles.listCard, idx === households.length - 1 && { marginBottom: 0 }]}>
-                <View style={[styles.listCardIcon, { backgroundColor: '#D6EEF8' }]}>
-                  <Ionicons name="home-outline" size={20} color="#A8CFEE" />
-                </View>
-                <Text style={styles.listCardName}>{h.name}</Text>
-              </View>
-            ))}
-
-            <TouchableOpacity style={styles.outlineBtn} onPress={() => setHouseholdModal({ name: '' })} activeOpacity={0.8}>
-              <Ionicons name="add-circle-outline" size={18} color="#A8CFEE" />
-              <Text style={styles.outlineBtnText}>Agregar hogar</Text>
-            </TouchableOpacity>
           </>
         )}
 
       </ScrollView>
-
-      {/* Modal agregar espacio */}
-      <Modal visible={!!spaceModal} transparent animationType="slide" onRequestClose={() => setSpaceModal(null)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Nuevo espacio</Text>
-            <View>
-              <Text style={styles.fieldLabel}>Emoji</Text>
-              <TextInput
-                style={styles.input}
-                value={spaceModal?.emoji ?? ''}
-                onChangeText={(v) => setSpaceModal((p) => p ? { ...p, emoji: v } : p)}
-                placeholder="🧊"
-                placeholderTextColor="#BBB"
-                maxLength={2}
-              />
-            </View>
-            <View>
-              <Text style={styles.fieldLabel}>Nombre</Text>
-              <TextInput
-                style={styles.input}
-                value={spaceModal?.name ?? ''}
-                onChangeText={(v) => setSpaceModal((p) => p ? { ...p, name: v } : p)}
-                placeholder="Ej: Heladera"
-                placeholderTextColor="#BBB"
-                autoFocus
-              />
-            </View>
-            <View style={styles.btnRow}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setSpaceModal(null)}>
-                <Text style={styles.secondaryBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex, { backgroundColor: '#4ABCB0' }]} onPress={handleAddSpace}>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                <Text style={styles.primaryBtnText}>Guardar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Modal agregar hogar */}
-      <Modal visible={!!householdModal} transparent animationType="slide" onRequestClose={() => setHouseholdModal(null)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Nuevo hogar</Text>
-            <View>
-              <Text style={styles.fieldLabel}>Nombre del hogar</Text>
-              <TextInput
-                style={styles.input}
-                value={householdModal?.name ?? ''}
-                onChangeText={(v) => setHouseholdModal((p) => p ? { ...p, name: v } : p)}
-                placeholder="Ej: Casa de la playa"
-                placeholderTextColor="#BBB"
-                autoFocus
-              />
-            </View>
-            <View style={styles.btnRow}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setHouseholdModal(null)}>
-                <Text style={styles.secondaryBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.primaryBtn, styles.btnFlex]} onPress={handleAddHousehold}>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                <Text style={styles.primaryBtnText}>Guardar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
       {/* Modal restock */}
       <Modal visible={!!restock} transparent animationType="slide" onRequestClose={() => setRestock(null)}>
@@ -653,9 +538,9 @@ export default function AddScreen() {
           <View style={styles.card}>
             {/* Header */}
             <View style={styles.successRow}>
-              <Text style={styles.productEmoji}>{restock?.product.emoji}</Text>
+              <Text style={styles.productEmoji}>{restock?.product.emoji ?? '📦'}</Text>
               <View>
-                <Text style={styles.cardTitle}>{restock?.product.name}</Text>
+                <Text style={styles.cardTitle}>{restock?.product.nombre}</Text>
                 {restock?.step === 'dates' && (
                   <Text style={styles.aiHint}>
                     Unidad {(restock.currentIndex ?? 0) + 1} de {restock.qty}
@@ -856,64 +741,6 @@ const styles = StyleSheet.create({
   aiHint: { fontSize: 12, color: '#999', lineHeight: 18 },
   datesIngresadas: { marginTop: 10, gap: 4 },
   dateIngresadaText: { fontSize: 13, color: '#27AE60', fontWeight: '600' },
-
-  // Tab bar
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 22,
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-  },
-  tabBtnActive: { backgroundColor: '#A8CFEE' },
-  tabBtnText: { fontSize: 14, fontWeight: '600', color: '#999' },
-  tabBtnTextActive: { color: '#fff' },
-
-  // List cards (espacios / hogares)
-  listCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#ECECEC',
-    padding: 14,
-    marginBottom: 10,
-  },
-  listCardIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#E8F8F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listCardEmoji: { fontSize: 24 },
-  listCardName: { fontSize: 16, fontWeight: '600', color: '#1A1A1A', flex: 1 },
-
-  // Outline button
-  outlineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderColor: '#4ABCB0',
-    borderRadius: 14,
-    paddingVertical: 14,
-    marginTop: 4,
-  },
-  outlineBtnText: { fontSize: 15, fontWeight: '700', color: '#A8CFEE' },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#555', marginBottom: 8 },
   optional: { fontWeight: '400', color: '#AAA' },
   input: {
@@ -952,6 +779,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   secondaryBtnText: { fontSize: 14, color: '#888', fontWeight: '600' },
+
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderRadius: 999,
+    backgroundColor: '#F0F0F0',
+  },
+  tabItemActive: {
+    backgroundColor: '#A8CFEE',
+  },
+  tabLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+  },
+  tabLabelActive: {
+    color: '#fff',
+  },
 
   // Select type screen
   sectionTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', marginBottom: 6 },

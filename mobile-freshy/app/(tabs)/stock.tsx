@@ -9,10 +9,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
+import { fetchInventory, DEFAULT_USER_ID, DEFAULT_STORAGE_AREA_ID } from '@/services/api';
+import type { InventoryItemResponse } from '@/services/api';
 
 // ------- Config -------
-const USER_ID = 'mock-user-id';           // TODO: reemplazar con auth real
-const STORAGE_AREA_ID = 'mock-area-id';   // TODO: reemplazar con espacio real
+const USER_ID = DEFAULT_USER_ID;
+const STORAGE_AREA_ID = DEFAULT_STORAGE_AREA_ID;
 
 // ------- Types -------
 type StockItem = {
@@ -25,32 +27,6 @@ type StockItem = {
   daysLeft: number;    // negative = expired
   shelfLife: number;
 };
-
-type InventoryItemResponse = {
-  id: string;
-  nombre: string;
-  marca?: string;
-  categoria?: string;
-  emoji?: string;
-  fecha_vencimiento?: string | null;  // 'YYYY-MM-DD'
-  estado: 'fresco' | 'por_vencer' | 'vencido';
-};
-
-// ------- API -------
-async function fetchInventory(_userId: string, _areaId: string): Promise<InventoryItemResponse[]> {
-  // TODO: conectar con Supabase / backend real
-  // const res = await fetch(`${API_BASE}/inventory?user_id=${_userId}`);
-  // if (!res.ok) throw new Error(`Error ${res.status}`);
-  // return res.json();
-
-  // Mock data mientras no hay backend conectado
-  return [
-    { id: '1', nombre: 'Leche', marca: 'La Serenísima', categoria: 'Heladera', emoji: '🥛', fecha_vencimiento: '2026-04-05', estado: 'fresco' },
-    { id: '2', nombre: 'Yogur', marca: 'Danone', categoria: 'Heladera', emoji: '🫙', fecha_vencimiento: '2026-03-30', estado: 'por_vencer' },
-    { id: '3', nombre: 'Pan lactal', marca: 'Bimbo', categoria: 'Alacena', emoji: '🍞', fecha_vencimiento: '2026-03-25', estado: 'vencido' },
-    { id: '4', nombre: 'Banana', marca: '', categoria: 'Frutas y verduras', emoji: '🍌', fecha_vencimiento: null, estado: 'fresco' },
-  ];
-}
 
 // ------- Helpers -------
 function calcDaysLeft(fechaVencimiento: string): number {
