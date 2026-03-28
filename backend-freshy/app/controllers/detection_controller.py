@@ -13,8 +13,26 @@ async def _get_image_bytes(image_file: UploadFile) -> bytes:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=f"Tipo de archivo no soportado: '{image_file.content_type}'. Usá JPEG, PNG o WEBP.",
+@router.post(
+    "/identify",
+    summary="Detect fruits and vegetables in an image",
+    status_code=status.HTTP_200_OK,
+)
+async def identify_image(file: UploadFile = File(...)):
+    """
+    Upload an image and get back the detected fruits/vegetables.
+
+    Returns a list of predictions with class names and confidence scores,
+    plus a deduplicated `detected_items` list ready to add to the inventory.
+    """
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported file type '{file.content_type}'. Use JPEG, PNG or WEBP.",
         )
-    image_bytes = await image_file.read()
+
+    image_bytes = await file.read()
+
     if len(image_bytes) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -73,3 +91,10 @@ async def detect_fruits(image: UploadFile = File(...)):
         return {"detections": [{"label": label, "confidence": 1.0}]}
 
     return {"detections": []}
+
+    # TODO: replace mock with real Roboflow call when integrating
+    return {
+        "detections": [
+            {"label": "strawberry", "confidence": 0.968}
+        ]
+    }

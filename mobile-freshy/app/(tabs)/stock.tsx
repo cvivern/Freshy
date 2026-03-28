@@ -8,13 +8,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AppHeader from '@/components/AppHeader';
-import { fetchInventory, DEFAULT_USER_ID, DEFAULT_STORAGE_AREA_ID, calcEstado } from '@/services/api';
+import AppHeaderConEleccionHogar from '@/components/AppHeaderConEleccionHogar';
+import type { HogarOption } from '@/components/AppHeaderConEleccionHogar';
+import { fetchInventory, fetchHouseholds, fetchStorageAreas, DEFAULT_USER_ID, calcEstado } from '@/services/api';
 import type { InventoryItemResponse } from '@/services/api';
-
-// ------- Config -------
-const USER_ID = DEFAULT_USER_ID;
-const STORAGE_AREA_ID = DEFAULT_STORAGE_AREA_ID;
 
 // ------- Types -------
 type StockItem = {
@@ -149,11 +146,15 @@ export default function StockScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadInventory() {
+  const [hogares, setHogares] = useState<HogarOption[]>([]);
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
+  const [storageAreaId, setStorageAreaId] = useState('');
+
+  async function loadInventory(areaId: string) {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchInventory(USER_ID, STORAGE_AREA_ID);
+      const data = await fetchInventory(DEFAULT_USER_ID, areaId);
       setItems(data.map(mapToStockItem));
     } catch (e: any) {
       setError(e.message ?? 'Error al cargar el inventario');
@@ -162,9 +163,40 @@ export default function StockScreen() {
     }
   }
 
+  // Load households on mount
   useEffect(() => {
-    loadInventory();
+    fetchHouseholds(DEFAULT_USER_ID).then((hhs) => {
+      if (hhs.length > 0) {
+        const opts: HogarOption[] = hhs.map(h => ({ id: h.id, name: h.name }));
+        setHogares(opts);
+        setSelectedHouseholdId(opts[0].id);
+      }
+    }).catch(() => {});
   }, []);
+
+  // When household changes, load its first storage area
+  useEffect(() => {
+    if (!selectedHouseholdId) return;
+    fetchStorageAreas(selectedHouseholdId).then((areas) => {
+      if (areas.length > 0) {
+        setStorageAreaId(areas[0].id);
+      } else {
+        setStorageAreaId('');
+        setItems([]);
+        setLoading(false);
+      }
+    }).catch(() => {
+      setStorageAreaId('');
+      setItems([]);
+      setLoading(false);
+    });
+  }, [selectedHouseholdId]);
+
+  // When storage area changes, load inventory
+  useEffect(() => {
+    if (!storageAreaId) return;
+    loadInventory(storageAreaId);
+  }, [storageAreaId]);
 
   const stats = calcStats(items);
 
@@ -185,7 +217,11 @@ export default function StockScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader />
+      <AppHeaderConEleccionHogar
+        hogares={hogares}
+        selectedId={selectedHouseholdId}
+        onSelect={setSelectedHouseholdId}
+      />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>Resumen del hogar</Text>
@@ -218,7 +254,7 @@ export default function StockScreen() {
         ) : error ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={loadInventory}>
+            <TouchableOpacity style={styles.retryButton} onPress={() => storageAreaId && loadInventory(storageAreaId)}>
               <Text style={styles.retryText}>Reintentar</Text>
             </TouchableOpacity>
           </View>

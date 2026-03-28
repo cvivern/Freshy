@@ -20,6 +20,7 @@ import {
   fetchStorageAreas,
 } from '@/services/api';
 import type { InventoryItem } from '@/services/api';
+import { scheduleExpiryNotifications } from '@/services/notifications';
 
 type FilterState = 'todos' | 'vence_pronto' | 'buen_estado' | 'vencidos';
 type SortOption = 'vence_primero' | 'vence_ultimo' | 'nombre_az' | 'mas_reciente';
@@ -199,7 +200,10 @@ export default function HomeScreen() {
     setLoading(true);
     setError(null);
     fetchInventoryItems(DEFAULT_USER_ID, selectedStorageAreaId)
-      .then(setItems)
+      .then((data) => {
+        setItems(data);
+        scheduleExpiryNotifications(data).catch(() => {});
+      })
       .catch((e) => setError(e.message ?? 'Error al cargar'))
       .finally(() => setLoading(false));
   }, [selectedStorageAreaId]);

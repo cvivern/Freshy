@@ -43,6 +43,17 @@ export type AddInventoryPayload = {
 
 // ------- Label mapping (Roboflow fruit-b2sy0) -------
 const LABEL_MAP: Record<string, string> = {
+  // Plain labels (returned by /api/v1/detection/identify)
+  strawberry:        'Frutilla',
+  apple:             'Manzana',
+  banana:            'Banana',
+  orange:            'Naranja',
+  mango:             'Mango',
+  grapes:            'Uvas',
+  watermelon:        'Sandía',
+  pineapple:         'Ananá',
+  lemon:             'Limón',
+  // _fresh / _rotten labels (legacy /detection/fruits endpoint)
   apple_fresh:       'Manzana',
   apple_rotten:      'Manzana (en mal estado)',
   banana_fresh:      'Banana',
@@ -61,6 +72,10 @@ const LABEL_MAP: Record<string, string> = {
 };
 
 // ------- Helpers -------
+export function getFruitName(label: string): string {
+  return LABEL_MAP[label] ?? label.replace(/_/g, ' ');
+}
+
 export function parseFruitDetections(detections: Detection[]): ProductInfo {
   if (!detections.length) return { category: 'Frutas y verduras', brand: '—', name: 'No reconocido' };
   const best = detections.reduce((a, b) => (a.confidence > b.confidence ? a : b));
@@ -126,6 +141,15 @@ export async function analyzeImage(uri: string): Promise<GeminiResult> {
   if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
   return response.json();
 }
+export async function identifyFruits(uri: string): Promise<Detection[]> {
+  const formData = new FormData();
+  formData.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  const response = await fetchWithTimeout(`${API_BASE}/api/v1/detection/identify`, { method: 'POST', body: formData });
+  if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
+  const data = await response.json();
+  return (data.detections ?? []) as Detection[];
+}
+
 export async function detectFrutaVerdura(uri: string): Promise<ProductInfo> {
   const formData = new FormData();
   formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
@@ -163,9 +187,11 @@ export async function scanBarcodeImage(uri: string): Promise<BarcodeInfo> {
 // ------- Inventory endpoints -------
 export async function fetchInventoryItems(
   userId: string = DEFAULT_USER_ID,
-  storageAreaId: string = DEFAULT_STORAGE_AREA_ID
+  storageAreaId?: string
 ): Promise<InventoryItem[]> {
-  const url = `${API_BASE}/api/v1/inventory/?user_id=${encodeURIComponent(userId)}&storage_area_id=${encodeURIComponent(storageAreaId)}`;
+  const params = new URLSearchParams({ user_id: userId });
+  if (storageAreaId) params.append('storage_area_id', storageAreaId);
+  const url = `${API_BASE}/api/v1/inventory/?${params.toString()}`;
   const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
   if (!response.ok) return [];
   return response.json();
@@ -177,7 +203,7 @@ export type InventoryItemResponse = InventoryItem;
 /** @deprecated Usá fetchInventoryItems. Mantenido para compatibilidad con stock.tsx */
 export async function fetchInventory(
   userId: string,
-  storageAreaId: string
+  storageAreaId?: string
 ): Promise<InventoryItem[]> {
   return fetchInventoryItems(userId, storageAreaId);
 }
@@ -273,7 +299,7 @@ export function formatItemName(cls: string): string {
     tomato: 'Tomate',
   };
   return map[cls.toLowerCase()] ?? cls.replace(/_/g, ' ');
-  
+}
 export async function addToInventory(payload: AddInventoryPayload): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/inventory/`,
@@ -287,4 +313,53 @@ export async function addToInventory(payload: AddInventoryPayload): Promise<void
     const text = await response.text();
     throw new Error(`Error del servidor (${response.status}): ${text}`);
   }
+}
+
+// ------- Profile -------
+
+export type ProfileMember = { id: string; name: string; email: string };
+
+export type UserProfile = {
+  id: string;
+  name: string;
+  email: string;
+  created_at: string;
+  household: { id: string; name: string } | null;
+  members: ProfileMember[];
+};
+
+export async function fetchProfile(userId: string): Promise<UserProfile | null> {
+  const url = `${API_BASE}/api/v1/profiles/${encodeURIComponent(userId)}`;
+  try {
+    const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function updateProfile(userId: string, fields: { name?: string; email?: string }): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/profiles/${encodeURIComponent(userId)}`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) },
+    10000
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Error del servidor (${response.status}): ${text}`);
+  }
+}
+
+export async function addHouseholdMember(userId: string, email: string): Promise<ProfileMember> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/profiles/${encodeURIComponent(userId)}/members`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) },
+    10000
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail ?? `Error del servidor (${response.status})`);
+  }
+  return response.json();
 }

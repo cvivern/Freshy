@@ -1,0 +1,75 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from app.core.supabase import get_supabase_client
+
+router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+def _get_db():
+    return get_supabase_client()
+
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    user_id: str
+    email: str
+    current_password: str
+    new_password: str
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/login", summary="Sign in with email and password")
+def login(body: LoginRequest):
+    db = _get_db()
+
+    try:
+        response = db.auth.sign_in_with_password({"email": body.email, "password": body.password})
+    except Exception:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    if not response.user:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+    user_id = str(response.user.id)
+
+    profile_res = db.table("profiles").select("id, name, email, created_at").eq("id", user_id).limit(1).execute()
+    profile = profile_res.data[0] if profile_res.data else None
+
+    return {
+        "user_id": user_id,
+        "name": profile["name"] if profile else response.user.email,
+        "email": response.user.email,
+        "created_at": profile["created_at"] if profile else None,
+    }
+
+
+@router.post("/change-password", summary="Change password after verifying current one")
+def change_password(body: ChangePasswordRequest):
+    if len(body.new_password) < 6:
+        raise HTTPException(status_code=400, detail="La nueva contraseña debe tener al menos 6 caracteres")
+
+    db = _get_db()
+
+    try:
+        db.auth.sign_in_with_password({"email": body.email, "password": body.current_password})
+    except Exception:
+        raise HTTPException(status_code=401, detail="La contraseña actual es incorrecta")
+
+    try:
+        db.auth.admin.update_user_by_id(body.user_id, {"password": body.new_password})
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"No se pudo actualizar la contraseña: {e}")
+
+    return {"message": "Contraseña actualizada correctamente"}
