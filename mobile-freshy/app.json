@@ -38,7 +38,8 @@
           "icon": "./assets/images/logo_blanco_sin_fondo_grande_arbol.png",
           "color": "#A8CFEE"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

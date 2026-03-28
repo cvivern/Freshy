@@ -1,11 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.controllers.auth_controller import router as auth_router
 from app.controllers.detection_controller import router as detection_router
 from app.controllers.fruit_controller import router as fruit_router
 from app.controllers.household_controller import router as household_router
 from app.controllers.inventory_controller import router as inventory_router
 from app.controllers.product_controller import router as product_router
+from app.controllers.profile_controller import router as profile_router
 from app.controllers.storage_area_controller import router as storage_area_router
 from app.core.config import settings
 
@@ -33,11 +35,13 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 API_PREFIX = "/api/v1"
 
+app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(product_router, prefix=API_PREFIX)
 app.include_router(fruit_router, prefix=API_PREFIX)
 app.include_router(inventory_router, prefix=API_PREFIX)
 app.include_router(detection_router, prefix=API_PREFIX)
 app.include_router(household_router, prefix=API_PREFIX)
+app.include_router(profile_router, prefix=API_PREFIX)
 app.include_router(storage_area_router, prefix=API_PREFIX)
 
 

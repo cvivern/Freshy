@@ -297,3 +297,52 @@ export async function addToInventory(payload: AddInventoryPayload): Promise<void
     throw new Error(`Error del servidor (${response.status}): ${text}`);
   }
 }
+
+// ------- Profile -------
+
+export type ProfileMember = { id: string; name: string; email: string };
+
+export type UserProfile = {
+  id: string;
+  name: string;
+  email: string;
+  created_at: string;
+  household: { id: string; name: string } | null;
+  members: ProfileMember[];
+};
+
+export async function fetchProfile(userId: string): Promise<UserProfile | null> {
+  const url = `${API_BASE}/api/v1/profiles/${encodeURIComponent(userId)}`;
+  try {
+    const response = await fetchWithTimeout(url, { method: 'GET' }, 10000);
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function updateProfile(userId: string, fields: { name?: string; email?: string }): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/profiles/${encodeURIComponent(userId)}`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) },
+    10000
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Error del servidor (${response.status}): ${text}`);
+  }
+}
+
+export async function addHouseholdMember(userId: string, email: string): Promise<ProfileMember> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/profiles/${encodeURIComponent(userId)}/members`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) },
+    10000
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail ?? `Error del servidor (${response.status})`);
+  }
+  return response.json();
+}

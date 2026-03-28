@@ -1,6 +1,8 @@
 import * as Notifications from 'expo-notifications';
 import type { InventoryItem } from './api';
 
+const WEEKLY_SUMMARY_ID = 'freshy-weekly-summary';
+
 // Show notifications in foreground too
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -51,7 +53,6 @@ export async function scheduleExpiryNotifications(items: InventoryItem[]): Promi
 
   if (expiringSoon.length === 0) return;
 
-  // Group into one notification if multiple items expire soon
   if (expiringSoon.length === 1) {
     const item = expiringSoon[0];
     const d = getDaysLeft(item.fecha_vencimiento);
@@ -75,4 +76,50 @@ export async function scheduleExpiryNotifications(items: InventoryItem[]): Promi
       trigger: null, // immediate
     });
   }
+}
+
+/**
+ * Schedules a repeating weekly summary notification.
+ * Also fires one immediately so the user sees it working right away.
+ * Call when the user enables "Resumen semanal".
+ */
+export async function scheduleWeeklySummary(items: InventoryItem[]): Promise<void> {
+  const granted = await requestNotificationPermission();
+  if (!granted) return;
+
+  // Cancel any existing weekly summary before rescheduling
+  await cancelWeeklySummary();
+
+  const total = items.length;
+  const porVencer = items.filter(i => i.estado === 'por_vencer').length;
+  const vencidos = items.filter(i => i.estado === 'vencido').length;
+
+  const bodyParts: string[] = [`📦 ${total} producto${total !== 1 ? 's' : ''} en stock`];
+  if (porVencer > 0) bodyParts.push(`⚠️ ${porVencer} por vencer`);
+  if (vencidos > 0) bodyParts.push(`🔴 ${vencidos} vencido${vencidos !== 1 ? 's' : ''}`);
+
+  const content: Notifications.NotificationContentInput = {
+    title: '📊 Resumen semanal de tu despensa',
+    body: bodyParts.join(' · '),
+    data: { freshy: true, type: 'weekly' },
+  };
+
+  // Immediate notification so the user sees it right away
+  await Notifications.scheduleNotificationAsync({ content, trigger: null });
+
+  // Repeating every 7 days
+  await Notifications.scheduleNotificationAsync({
+    identifier: WEEKLY_SUMMARY_ID,
+    content,
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 7 * 24 * 60 * 60,
+      repeats: true,
+    },
+  });
+}
+
+/** Cancels the repeating weekly summary notification. */
+export async function cancelWeeklySummary(): Promise<void> {
+  await Notifications.cancelScheduledNotificationAsync(WEEKLY_SUMMARY_ID).catch(() => {});
 }
