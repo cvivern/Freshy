@@ -17,10 +17,13 @@ import {
   fetchHouseholds,
   fetchInventoryItems,
   fetchStorageAreas,
+  DEFAULT_STORAGE_AREA_ID,
+  DEFAULT_USER_ID,
 } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import type { InventoryItem } from '@/services/api';
 import { scheduleExpiryNotifications } from '@/services/notifications';
+import { useSpaceMonitor } from '@/hooks/useSpaceMonitor';
 
 type FilterState = 'todos' | 'vence_pronto' | 'buen_estado' | 'vencidos';
 type SortOption = 'vence_primero' | 'vence_ultimo' | 'nombre_az' | 'mas_reciente';
@@ -166,6 +169,12 @@ export default function HomeScreen() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
   const [selectedStorageAreaId, setSelectedStorageAreaId] = useState('');
 
+  const { MonitorCamera } = useSpaceMonitor({
+    storageAreaId: selectedStorageAreaId ?? DEFAULT_STORAGE_AREA_ID,
+    userId: user?.user_id ?? DEFAULT_USER_ID,
+    enabled: true,
+  });
+
   // Cargar hogares al montar
   useEffect(() => {
     fetchHouseholds(user?.user_id ?? '', user?.access_token).then((hhs) => {
@@ -235,6 +244,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      <MonitorCamera />
       <AppHeaderConEleccionHogar
         hogares={hogares}
         selectedId={selectedHouseholdId}
