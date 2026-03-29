@@ -79,10 +79,11 @@ export function useSpaceMonitor({
   const lastMotionTRef  = useRef(0);
   const analyzingRef    = useRef(false);
   const intervalRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cameraReadyRef  = useRef(false);
   const [monitorStatus, setMonitorStatus] = useState<'idle' | 'watching' | 'motion' | 'analyzing'>('idle');
 
   const captureAndProcess = useCallback(async () => {
-    if (!cameraRef.current || analyzingRef.current || !enabled) return;
+    if (!cameraRef.current || !cameraReadyRef.current || analyzingRef.current || !enabled) return;
 
     let b64: string | null = null;
     try {
@@ -280,6 +281,8 @@ export function useSpaceMonitor({
               ref: cameraRef,
               style: monStyles.camera,
               facing: 'back',
+              onCameraReady: () => { cameraReadyRef.current = true; },
+              onMountError: (e: any) => console.warn('[SpaceMonitor] mount error:', e),
             })
           )
         : null,
