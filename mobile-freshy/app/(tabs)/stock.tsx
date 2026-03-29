@@ -55,10 +55,6 @@ type AddToShoppingListParams = {
   accessToken?: string;
 };
 
-async function addToShoppingList(params: AddToShoppingListParams): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 800));
-  console.log('✅ Ajouté à la liste de courses :', params);
-}
 
 // ------- Helpers -------
 function calcDaysLeft(fechaVencimiento: string): number {
@@ -659,33 +655,39 @@ export default function StockScreen() {
   ];
 
   return (
-    <View style={styles.container}>
-      <AppHeaderConEleccionHogar
-        hogares={hogares}
-        selectedId={selectedHouseholdId}
-        onSelect={setSelectedHouseholdId}
+  <View style={styles.container}>
+    <AppHeaderConEleccionHogar
+      hogares={hogares}
+      selectedId={selectedHouseholdId}
+      onSelect={setSelectedHouseholdId}
+    />
+
+    {/* Tabs */}
+    <View style={styles.tabBar}>
+      {STOCK_TABS.map((tab) => (
+        <TouchableOpacity
+          key={tab.key}
+          style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
+          onPress={() => setActiveTab(tab.key)}
+        >
+          <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+            {tab.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+
+    {activeTab === 'lista_compras' ? (
+      <ListaDeComprasScreen
+        items={shoppingList}
+        stockItems={items}
+        onRemove={handleRemoveFromList}
+        onChangeQuantity={handleChangeQuantity}
+        onAddManual={handleAddManual}
+        onAddSuggestion={handleAddSuggestion}
       />
-
-      {/* ---- 2-tab bar: Stock / Lista de compras ---- */}
-      <View style={styles.tabBar}>
-        {STOCK_TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
-            onPress={() => setActiveTab(tab.key)}
-          >
-            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
+    ) : (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {activeTab === 'lista_compras' ? (
-          <Text style={styles.emptyText}>Lista de compras próximamente.</Text>
-        ) : (
-        <>
         <Text style={styles.sectionTitle}>Resumen del hogar</Text>
 
         <View style={styles.statsGrid}>
@@ -753,6 +755,32 @@ export default function StockScreen() {
   );
 }
 
+        {loading ? (
+          <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => storageAreaId && loadInventory(storageAreaId)}>
+              <Text style={styles.retryText}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filtered.length === 0 ? (
+          <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
+        ) : (
+          filtered.map((item) => (
+            <ProductCard
+              key={item.id}
+              item={item}
+              cartState={cartStates[item.id] ?? 'idle'}
+              onAddToCart={() => handleAddToCart(item)}
+            />
+          ))
+        )}
+      </ScrollView>
+    )}
+  </View>
+);
+}
 // ------- Styles -------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
