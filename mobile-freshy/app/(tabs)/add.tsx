@@ -94,6 +94,7 @@ export default function AddScreen() {
   const [detectionIndex, setDetectionIndex] = useState(0);
   const [fruitExpiry, setFruitExpiry] = useState('');
   const [selectedDays, setSelectedDays] = useState<number | null>(null);
+  const [aiRecommendedDays, setAiRecommendedDays] = useState<number | null>(null);
   const [pkgData, setPkgData] = useState<PackagedScanResult>({ name: null, brand: null, expiry_date: null });
   const [pkgPhotoCount, setPkgPhotoCount] = useState(0);
   const [restock, setRestock] = useState<RestockState | null>(null);
@@ -379,13 +380,17 @@ export default function AddScreen() {
     setDetectionIndex(0);
     setFruitExpiry('');
     setSelectedDays(null);
+    setAiRecommendedDays(null);
     setPkgData({ name: null, brand: null, expiry_date: null });
     setPkgPhotoCount(0);
   }
 
   function handleFruitConfirmYes() {
-    setFruitExpiry('');
-    setSelectedDays(null);
+    const det = detections[detectionIndex];
+    const recommended = det?.shelf_life_days ?? 3;
+    setAiRecommendedDays(recommended);
+    setSelectedDays(recommended);
+    handleQuickDays(recommended);
     setPhase('fruit_expiry');
   }
 
@@ -567,9 +572,16 @@ export default function AddScreen() {
                 <Text style={styles.cardTitle}>{fruitName}</Text>
               </View>
 
-              {/* Quick-pick buttons */}
+              {/* AI recommendation + quick-pick buttons */}
               <View>
-                <Text style={styles.fieldLabel}>¿Cuántos días le quedan?</Text>
+                <Text style={styles.aiHint}>
+                  {'La IA recomienda que esta fruta no durará más de '}
+                  <Text style={{ fontWeight: '700', color: '#E67E22' }}>
+                    {aiRecommendedDays ?? selectedDays ?? 3}{' '}
+                    {(aiRecommendedDays ?? selectedDays ?? 3) === 1 ? 'día' : 'días'}
+                  </Text>
+                  {'. ¿Está bien o modificar?'}
+                </Text>
                 <View style={styles.expiryBtnRow}>
                   {([1, 3, 5] as const).map((days) => (
                     <TouchableOpacity
@@ -589,21 +601,6 @@ export default function AddScreen() {
                     Vence: {fruitExpiry}
                   </Text>
                 )}
-              </View>
-
-              {/* Manual input */}
-              <View>
-                <Text style={styles.fieldLabel}>
-                  O ingresá la fecha <Text style={styles.optional}>(DD/MM/AAAA)</Text>
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  value={fruitExpiry}
-                  onChangeText={(v) => { setFruitExpiry(v); setSelectedDays(null); }}
-                  placeholder="DD/MM/AAAA"
-                  placeholderTextColor="#BBB"
-                  // keyboardType="numeric"
-                />
               </View>
 
               <View style={styles.btnRow}>
