@@ -469,11 +469,12 @@ function ListaDeComprasScreen({
 }
 
 // ------- Main Screen -------
-type StockTab = 'stock' | 'lista_compras';
+type StockTab = 'stock' | 'lista_compras' | 'recetas';
 
 const STOCK_TABS: { key: StockTab; label: string }[] = [
   { key: 'stock', label: 'Stock' },
   { key: 'lista_compras', label: 'Lista de compras' },
+  { key: 'recetas', label: 'Recetas' },
 ];
 
 export default function StockScreen() {
@@ -622,19 +623,24 @@ export default function StockScreen() {
     />
 
     {/* Tabs */}
-    <View style={styles.tabBar}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.tabBar}
+      contentContainerStyle={styles.tabBarContent}
+    >
       {STOCK_TABS.map((tab) => (
         <TouchableOpacity
           key={tab.key}
           style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
           onPress={() => setActiveTab(tab.key)}
         >
-          <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+          <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]} numberOfLines={1}>
             {tab.label}
           </Text>
         </TouchableOpacity>
       ))}
-    </View>
+    </ScrollView>
 
     {activeTab === 'lista_compras' ? (
       <ListaDeComprasScreen
@@ -645,6 +651,10 @@ export default function StockScreen() {
         onAddManual={handleAddManual}
         onAddSuggestion={handleAddSuggestion}
       />
+    ) : activeTab === 'recetas' ? (
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Text style={styles.emptyText}>Recetas próximamente.</Text>
+      </ScrollView>
     ) : (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.sectionTitle}>Resumen del hogar</Text>
@@ -735,19 +745,12 @@ const styles = StyleSheet.create({
   statusBadge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   statusText: { fontSize: 13, fontWeight: '700' },
 
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
+  tabBar: { flexGrow: 0, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
+  tabBarContent: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
   tabItem: {
-    flex: 1,
     alignItems: 'center',
     paddingVertical: 11,
+    paddingHorizontal: 16,
     borderRadius: 999,
     backgroundColor: '#F0F0F0',
   },
