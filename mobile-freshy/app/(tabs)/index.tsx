@@ -169,7 +169,7 @@ export default function HomeScreen() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
   const [selectedStorageAreaId, setSelectedStorageAreaId] = useState('');
 
-  const { MonitorIndicator } = useSpaceMonitor({
+  useSpaceMonitor({
     userId: user?.user_id ?? DEFAULT_USER_ID,
     enabled: true,
   });
@@ -243,7 +243,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <MonitorIndicator />
       <AppHeaderConEleccionHogar
         hogares={hogares}
         selectedId={selectedHouseholdId}
