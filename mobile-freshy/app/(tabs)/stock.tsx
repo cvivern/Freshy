@@ -62,6 +62,9 @@ type AddToShoppingListParams = {
   accessToken?: string;
 };
 
+async function addToShoppingList(_params: AddToShoppingListParams): Promise<void> {
+  // Local shopping list — no backend call needed
+}
 
 // ------- Helpers -------
 function calcDaysLeft(fechaVencimiento: string): number {
@@ -585,7 +588,7 @@ export default function StockScreen() {
       }
       await updateInventoryItem(
         editItem.id,
-        { product_name: editName.trim() || undefined, expiry_date: isoExpiry },
+        { nombre: editName.trim() || undefined, fecha_vencimiento: isoExpiry },
         user?.access_token,
       );
       setItems((prev) => prev.map((i) => {
@@ -623,7 +626,7 @@ export default function StockScreen() {
         name: item.name,
         brand: item.brand,
         emoji: item.emoji,
-        accessToken: user?.access_token,
+        accessToken: user?.access_token ?? undefined,
       });
       setShoppingList((prev) => [
         ...prev,
