@@ -22,7 +22,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { InventoryItemResponse } from '@/services/api';
 
 // ------- Types -------
-type ScreenMode = 'stock' | 'lista';
 type CartButtonState = 'idle' | 'loading' | 'added' | 'error';
 
 type StockItem = {
@@ -109,46 +108,6 @@ function calcStats(items: StockItem[]) {
   };
 }
 
-// ------- Mode Switcher -------
-const MODES: { key: ScreenMode; label: string }[] = [
-  { key: 'stock', label: 'Stock' },
-  { key: 'lista', label: 'Lista de compras' },
-];
-
-function ModeSwitcher({ mode, onChange }: { mode: ScreenMode; onChange: (m: ScreenMode) => void }) {
-  const currentIndex = MODES.findIndex((m) => m.key === mode);
-  const goLeft  = () => onChange(MODES[(currentIndex - 1 + MODES.length) % MODES.length].key);
-  const goRight = () => onChange(MODES[(currentIndex + 1) % MODES.length].key);
-
-  return (
-    <View style={modeSwitcherStyles.container}>
-      <TouchableOpacity onPress={goLeft} style={modeSwitcherStyles.arrowButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Ionicons name="chevron-back" size={20} color="#5B9BD5" />
-      </TouchableOpacity>
-      <View style={modeSwitcherStyles.labelWrap}>
-        <Text style={modeSwitcherStyles.label}>{MODES[currentIndex].label}</Text>
-        <View style={modeSwitcherStyles.dots}>
-          {MODES.map((m) => (
-            <View key={m.key} style={[modeSwitcherStyles.dot, m.key === mode && modeSwitcherStyles.dotActive]} />
-          ))}
-        </View>
-      </View>
-      <TouchableOpacity onPress={goRight} style={modeSwitcherStyles.arrowButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Ionicons name="chevron-forward" size={20} color="#5B9BD5" />
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-const modeSwitcherStyles = StyleSheet.create({
-  container: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#F5F9FF', borderBottomWidth: 1, borderBottomColor: '#E0ECF8', gap: 12 },
-  arrowButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#E8F4FF', alignItems: 'center', justifyContent: 'center' },
-  labelWrap: { alignItems: 'center', gap: 4, minWidth: 160 },
-  label: { fontSize: 16, fontWeight: '700', color: '#1A1A1A', letterSpacing: 0.2 },
-  dots: { flexDirection: 'row', gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#C8DCEF' },
-  dotActive: { backgroundColor: '#5B9BD5', width: 16 },
-});
 
 // ------- Cart Button -------
 function CartButton({ state, onPress }: { state: CartButtonState; onPress: () => void }) {
@@ -529,7 +488,6 @@ export default function StockScreen() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
   const [storageAreaId, setStorageAreaId] = useState('');
 
-  const [mode, setMode] = useState<ScreenMode>('stock');
   const [cartStates, setCartStates] = useState<Record<string, CartButtonState>>({});
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
 
@@ -699,56 +657,42 @@ export default function StockScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>Todos los productos</Text>
-      <ModeSwitcher mode={mode} onChange={setMode} />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll} contentContainerStyle={styles.filtersContent}>
+          {FILTERS.map((f) => (
+            <TouchableOpacity
+              key={f.key}
+              style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
+              onPress={() => setActiveFilter(f.key)}
+            >
+              <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-      {mode === 'lista' ? (
-        <ListaDeComprasScreen
-          items={shoppingList}
-          stockItems={items}
-          onRemove={handleRemoveFromList}
-          onChangeQuantity={handleChangeQuantity}
-          onAddManual={handleAddManual}
-          onAddSuggestion={handleAddSuggestion}
-        />
-      ) : (
-        <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll} contentContainerStyle={styles.filtersContent}>
-            {FILTERS.map((f) => (
-              <TouchableOpacity
-                key={f.key}
-                style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
-                onPress={() => setActiveFilter(f.key)}
-              >
-                <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+        {loading ? (
+          <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => storageAreaId && loadInventory(storageAreaId)}>
+              <Text style={styles.retryText}>Reintentar</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filtered.length === 0 ? (
+          <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
+        ) : (
+          filtered.map((item) => (
+            <ProductCard
+              key={item.id}
+              item={item}
+              cartState={cartStates[item.id] ?? 'idle'}
+              onAddToCart={() => handleAddToCart(item)}
+            />
+          ))
+        )}
 
-          {loading ? (
-            <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
-          ) : error ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={() => storageAreaId && loadInventory(storageAreaId)}>
-                <Text style={styles.retryText}>Reintentar</Text>
-              </TouchableOpacity>
-            </View>
-          ) : filtered.length === 0 ? (
-            <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
-          ) : (
-            filtered.map((item) => (
-              <ProductCard
-                key={item.id}
-                item={item}
-                cartState={cartStates[item.id] ?? 'idle'}
-                onAddToCart={() => handleAddToCart(item)}
-              />
-            ))
-          )}
-        </>
-      )}
       </ScrollView>
     )}
     </View>
