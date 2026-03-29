@@ -23,10 +23,10 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="add"
+        name="index"
         options={{
-          title: 'Agregar',
-          tabBarIcon: ({ color }) => <TabIcon name="add-circle-outline" color={color} />,
+          title: 'Inicio',
+          tabBarIcon: ({ color }) => <TabIcon name="home" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -37,10 +37,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="index"
+        name="add"
         options={{
-          title: 'Inicio',
-          tabBarIcon: ({ color }) => <TabIcon name="home" color={color} />,
+          title: 'Agregar',
+          tabBarIcon: ({ color }) => <TabIcon name="add-circle-outline" color={color} />,
         }}
       />
       <Tabs.Screen

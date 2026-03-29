@@ -1,31 +1,64 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeaderConEleccionHogar from '@/components/AppHeaderConEleccionHogar';
 import type { HogarOption } from '@/components/AppHeaderConEleccionHogar';
-import { fetchInventory, fetchHouseholds, fetchStorageAreas, calcEstado } from '@/services/api';
+import {
+  fetchInventory,
+  fetchHouseholds,
+  fetchStorageAreas,
+  calcEstado,
+} from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import type { InventoryItemResponse } from '@/services/api';
 
 // ------- Types -------
+type ScreenMode = 'stock' | 'lista';
+type CartButtonState = 'idle' | 'loading' | 'added' | 'error';
+
 type StockItem = {
   id: string;
   emoji: string;
   name: string;
   brand: string;
   space: string;
-  expiryDate: string;  // 'DD/MM/YYYY'
-  daysLeft: number;    // negative = expired — kept for progress bar
+  expiryDate: string;
+  daysLeft: number;
   shelfLife: number;
   estado: 'fresco' | 'por_vencer' | 'vencido';
 };
+
+type ShoppingListItem = {
+  id: string;
+  emoji: string;
+  name: string;
+  brand: string;
+  quantity: number;
+};
+
+// ------- Mock addToShoppingList -------
+type AddToShoppingListParams = {
+  householdId: string;
+  inventoryItemId: string;
+  name: string;
+  brand: string;
+  emoji: string;
+  accessToken?: string;
+};
+
+async function addToShoppingList(params: AddToShoppingListParams): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  console.log('✅ Ajouté à la liste de courses :', params);
+}
 
 // ------- Helpers -------
 function calcDaysLeft(fechaVencimiento: string): number {
@@ -48,11 +81,8 @@ function shelfLifeFromEstado(estado: StockItem['estado']): number {
 }
 
 function mapToStockItem(item: InventoryItemResponse): StockItem {
-  const daysLeft = item.fecha_vencimiento != null
-    ? calcDaysLeft(item.fecha_vencimiento)
-    : 999;
+  const daysLeft = item.fecha_vencimiento != null ? calcDaysLeft(item.fecha_vencimiento) : 999;
   const estado = calcEstado(item.fecha_vencimiento);
-
   return {
     id: item.id,
     emoji: item.emoji ?? '📦',
@@ -67,14 +97,11 @@ function mapToStockItem(item: InventoryItemResponse): StockItem {
 }
 
 function getStatus(estado: StockItem['estado']): {
-  label: string;
-  bg: string;
-  textColor: string;
-  borderColor: string;
+  label: string; bg: string; textColor: string; borderColor: string;
 } {
-  if (estado === 'vencido')    return { label: 'Vencido',        bg: '#FDDEDE', textColor: '#C0392B', borderColor: '#E07070' };
-  if (estado === 'por_vencer') return { label: 'Por vencer',     bg: '#FFF3CD', textColor: '#996600', borderColor: '#E0C050' };
-  return                              { label: 'En buen estado',  bg: '#DFF5E3', textColor: '#27AE60', borderColor: '#60B870' };
+  if (estado === 'vencido')    return { label: 'Vencido',       bg: '#FDDEDE', textColor: '#C0392B', borderColor: '#E07070' };
+  if (estado === 'por_vencer') return { label: 'Por vencer',    bg: '#FFF3CD', textColor: '#996600', borderColor: '#E0C050' };
+  return                              { label: 'En buen estado', bg: '#DFF5E3', textColor: '#27AE60', borderColor: '#60B870' };
 }
 
 function calcStats(items: StockItem[]) {
@@ -86,16 +113,70 @@ function calcStats(items: StockItem[]) {
   };
 }
 
-// ------- Sub-components -------
-function StatCard({
-  value, label, iconName, iconColor, borderColor, bgColor,
-}: {
-  value: number;
-  label: string;
+// ------- Mode Switcher -------
+const MODES: { key: ScreenMode; label: string }[] = [
+  { key: 'stock', label: 'Stock' },
+  { key: 'lista', label: 'Lista de compras' },
+];
+
+function ModeSwitcher({ mode, onChange }: { mode: ScreenMode; onChange: (m: ScreenMode) => void }) {
+  const currentIndex = MODES.findIndex((m) => m.key === mode);
+  const goLeft  = () => onChange(MODES[(currentIndex - 1 + MODES.length) % MODES.length].key);
+  const goRight = () => onChange(MODES[(currentIndex + 1) % MODES.length].key);
+
+  return (
+    <View style={modeSwitcherStyles.container}>
+      <TouchableOpacity onPress={goLeft} style={modeSwitcherStyles.arrowButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Ionicons name="chevron-back" size={20} color="#5B9BD5" />
+      </TouchableOpacity>
+      <View style={modeSwitcherStyles.labelWrap}>
+        <Text style={modeSwitcherStyles.label}>{MODES[currentIndex].label}</Text>
+        <View style={modeSwitcherStyles.dots}>
+          {MODES.map((m) => (
+            <View key={m.key} style={[modeSwitcherStyles.dot, m.key === mode && modeSwitcherStyles.dotActive]} />
+          ))}
+        </View>
+      </View>
+      <TouchableOpacity onPress={goRight} style={modeSwitcherStyles.arrowButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <Ionicons name="chevron-forward" size={20} color="#5B9BD5" />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const modeSwitcherStyles = StyleSheet.create({
+  container: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, paddingHorizontal: 16, backgroundColor: '#F5F9FF', borderBottomWidth: 1, borderBottomColor: '#E0ECF8', gap: 12 },
+  arrowButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#E8F4FF', alignItems: 'center', justifyContent: 'center' },
+  labelWrap: { alignItems: 'center', gap: 4, minWidth: 160 },
+  label: { fontSize: 16, fontWeight: '700', color: '#1A1A1A', letterSpacing: 0.2 },
+  dots: { flexDirection: 'row', gap: 5 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#C8DCEF' },
+  dotActive: { backgroundColor: '#5B9BD5', width: 16 },
+});
+
+// ------- Cart Button -------
+function CartButton({ state, onPress }: { state: CartButtonState; onPress: () => void }) {
+  const isDisabled = state === 'loading' || state === 'added';
+  const bgColor     = state === 'added' ? '#DFF5E3' : state === 'error' ? '#FDDEDE' : '#E8F4FF';
+  const borderColor = state === 'added' ? '#60B870' : state === 'error' ? '#E07070' : '#A8CFEE';
+  const iconName: React.ComponentProps<typeof Ionicons>['name'] =
+    state === 'added' ? 'checkmark-circle' : state === 'error' ? 'alert-circle-outline' : 'cart-outline';
+  const iconColor = state === 'added' ? '#27AE60' : state === 'error' ? '#C0392B' : '#5B9BD5';
+
+  return (
+    <TouchableOpacity onPress={onPress} disabled={isDisabled} style={[styles.cartButton, { backgroundColor: bgColor, borderColor }]} activeOpacity={0.75}>
+      {state === 'loading'
+        ? <ActivityIndicator size="small" color="#5B9BD5" />
+        : <Ionicons name={iconName} size={20} color={iconColor} />}
+    </TouchableOpacity>
+  );
+}
+
+// ------- Stat Card -------
+function StatCard({ value, label, iconName, iconColor, borderColor, bgColor }: {
+  value: number; label: string;
   iconName: React.ComponentProps<typeof Ionicons>['name'];
-  iconColor: string;
-  borderColor: string;
-  bgColor: string;
+  iconColor: string; borderColor: string; bgColor: string;
 }) {
   return (
     <View style={[styles.statCard, { borderColor }]}>
@@ -108,25 +189,29 @@ function StatCard({
   );
 }
 
-function ProductCard({ item }: { item: StockItem }) {
+// ------- Product Card -------
+function ProductCard({ item, cartState, onAddToCart }: {
+  item: StockItem; cartState: CartButtonState; onAddToCart: () => void;
+}) {
   const status = getStatus(item.estado);
   const progress = Math.min(1, Math.max(0, (item.shelfLife - item.daysLeft) / item.shelfLife));
+
   return (
     <View style={[styles.productCard, { borderColor: status.borderColor }]}>
       <View style={styles.productTopRow}>
         <Text style={styles.productEmoji}>{item.emoji}</Text>
-        <View style={styles.spaceChip}>
-          <Text style={styles.spaceChipText}>{item.space}</Text>
+        <View style={styles.productTopRight}>
+          <View style={styles.spaceChip}>
+            <Text style={styles.spaceChipText}>{item.space}</Text>
+          </View>
+          <CartButton state={cartState} onPress={onAddToCart} />
         </View>
       </View>
-
       <Text style={styles.productName}>{item.name}</Text>
       {!!item.brand && <Text style={styles.productBrand}>{item.brand}</Text>}
-
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: status.borderColor }]} />
       </View>
-
       <View style={styles.productFooter}>
         <View>
           <Text style={styles.expiryLabel}>Vencimiento</Text>
@@ -140,9 +225,298 @@ function ProductCard({ item }: { item: StockItem }) {
   );
 }
 
+// ------- Agregar Otros Form -------
+function AgregarOtrosForm({ onAdd }: { onAdd: (item: Omit<ShoppingListItem, 'id'>) => void }) {
+  const [open, setOpen] = useState(false);
+  const [nombre, setNombre] = useState('');
+  const [marca, setMarca] = useState('');
+  const [cantidad, setCantidad] = useState('1');
+  const [formHeight, setFormHeight] = useState(0); // ← hauteur mesurée
+  const anim = useRef(new Animated.Value(0)).current;
+
+  const toggle = () => {
+    const toValue = open ? 0 : 1;
+    Animated.spring(anim, { toValue, useNativeDriver: false, tension: 80, friction: 12 }).start();
+    setOpen((prev) => !prev);
+  };
+
+  const animatedHeight = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, formHeight > 0 ? formHeight + 10 : 0], // +10 pour le marginTop
+  });
+  const formOpacity = anim.interpolate({
+    inputRange: [0, 0.4, 1],
+    outputRange: [0, 0, 1],
+  });
+
+  const handleCantidadChange = (delta: number) => {
+    setCantidad((prev) => String(Math.max(1, (parseInt(prev, 10) || 1) + delta)));
+  };
+
+  const handleAdd = () => {
+    if (!nombre.trim()) return;
+    const qty = Math.max(1, parseInt(cantidad, 10) || 1);
+    onAdd({ emoji: '🛒', name: nombre.trim(), brand: marca.trim(), quantity: qty });
+    setNombre('');
+    setMarca('');
+    setCantidad('1');
+    toggle();
+  };
+
+  return (
+    <View style={formStyles.wrapper}>
+      <TouchableOpacity onPress={toggle} style={formStyles.triggerButton} activeOpacity={0.8}>
+        <Ionicons name={open ? 'close-circle-outline' : 'add-circle-outline'} size={20} color="#5B9BD5" />
+        <Text style={formStyles.triggerText}>{open ? 'Cancelar' : 'Agregar otros'}</Text>
+      </TouchableOpacity>
+
+      <Animated.View style={{ height: animatedHeight, opacity: formOpacity, overflow: 'hidden' }}>
+        {/* View invisible pour mesurer la hauteur réelle */}
+        <View
+          onLayout={(e) => setFormHeight(e.nativeEvent.layout.height)}
+          style={formStyles.formInner}
+        >
+          <Text style={formStyles.formTitle}>Producto personalizado</Text>
+          <View style={formStyles.field}>
+            <Text style={formStyles.fieldLabel}>Nombre *</Text>
+            <TextInput
+              style={formStyles.input}
+              placeholder="Ej: Arroz, Leche..."
+              placeholderTextColor="#C0C0C0"
+              value={nombre}
+              onChangeText={setNombre}
+              returnKeyType="next"
+            />
+          </View>
+          <View style={formStyles.field}>
+            <Text style={formStyles.fieldLabel}>Marca</Text>
+            <TextInput
+              style={formStyles.input}
+              placeholder="Opcional"
+              placeholderTextColor="#C0C0C0"
+              value={marca}
+              onChangeText={setMarca}
+              returnKeyType="done"
+            />
+          </View>
+          <View style={formStyles.bottomRow}>
+            <View style={formStyles.cantidadGroup}>
+              <Text style={formStyles.fieldLabel}>Cantidad</Text>
+              <View style={formStyles.cantidadControl}>
+                <TouchableOpacity onPress={() => handleCantidadChange(-1)} style={formStyles.cantidadBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="remove" size={16} color="#5B9BD5" />
+                </TouchableOpacity>
+                <TextInput
+                  style={formStyles.cantidadInput}
+                  value={cantidad}
+                  onChangeText={(v) => setCantidad(v.replace(/[^0-9]/g, '') || '1')}
+                  keyboardType="numeric"
+                  maxLength={3}
+                  textAlign="center"
+                />
+                <TouchableOpacity onPress={() => handleCantidadChange(+1)} style={formStyles.cantidadBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="add" size={16} color="#5B9BD5" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <TouchableOpacity
+              onPress={handleAdd}
+              style={[formStyles.addButton, !nombre.trim() && formStyles.addButtonDisabled]}
+              activeOpacity={0.8}
+              disabled={!nombre.trim()}
+            >
+              <Ionicons name="checkmark" size={18} color="#fff" />
+              <Text style={formStyles.addButtonText}>Agregar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
+const formStyles = StyleSheet.create({
+  wrapper: { marginTop: 6, marginBottom: 4 },
+  triggerButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 12, paddingHorizontal: 20,
+    borderWidth: 1.5, borderColor: '#A8CFEE', borderRadius: 14, borderStyle: 'dashed',
+    backgroundColor: '#F5F9FF',
+  },
+  triggerText: { fontSize: 15, fontWeight: '600', color: '#5B9BD5' },
+  formInner: {
+    marginTop: 10, padding: 16, gap: 12,
+    backgroundColor: '#F5F9FF', borderRadius: 16,
+    borderWidth: 1.5, borderColor: '#D0E8F8',
+  },
+  formTitle: { fontSize: 13, fontWeight: '700', color: '#7A9BBD', letterSpacing: 0.5, textTransform: 'uppercase' },
+  field: { gap: 5 },
+  fieldLabel: { fontSize: 11, fontWeight: '700', color: '#9AACBC', letterSpacing: 0.5, textTransform: 'uppercase' },
+  input: {
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#D8ECF8',
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    fontSize: 15, color: '#1A1A1A',
+  },
+  bottomRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 2 },
+  cantidadGroup: { gap: 5 },
+  cantidadControl: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#D8ECF8', borderRadius: 10, overflow: 'hidden',
+  },
+  cantidadBtn: { width: 36, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EDF5FF' },
+  cantidadInput: { width: 44, height: 40, fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
+  addButton: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: '#5B9BD5', borderRadius: 10, paddingVertical: 12,
+  },
+  addButtonDisabled: { backgroundColor: '#B8D4ED' },
+  addButtonText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+});
+
+// ------- Suggestions Section -------
+function SuggestionsSection({
+  stockItems,
+  shoppingList,
+  onAddSuggestion,
+}: {
+  stockItems: StockItem[];
+  shoppingList: ShoppingListItem[];
+  onAddSuggestion: (item: StockItem) => void;
+}) {
+  const alreadyInList = new Set(shoppingList.map((i) => i.id));
+  const suggestions = stockItems.filter(
+    (i) => (i.estado === 'vencido' || i.estado === 'por_vencer') && !alreadyInList.has(i.id)
+  );
+
+  if (suggestions.length === 0) return null;
+
+  return (
+    <View style={suggStyles.container}>
+      <View style={suggStyles.header}>
+        <View style={suggStyles.iconWrap}>
+          <Ionicons name="bulb-outline" size={16} color="#E07820" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={suggStyles.title}>Sugerencias para reponer</Text>
+          <Text style={suggStyles.subtitle}>Productos vencidos o próximos a vencer en tu stock</Text>
+        </View>
+      </View>
+
+      {suggestions.map((item, index) => {
+        const isVencido = item.estado === 'vencido';
+        const isLast = index === suggestions.length - 1;
+        return (
+          <View key={item.id} style={[suggStyles.row, !isLast && suggStyles.rowBorder]}>
+            <Text style={suggStyles.emoji}>{item.emoji}</Text>
+            <View style={suggStyles.info}>
+              <Text style={suggStyles.name}>{item.name}</Text>
+              {!!item.brand && <Text style={suggStyles.brand}>{item.brand}</Text>}
+              <View style={[suggStyles.badge, isVencido ? suggStyles.badgeVencido : suggStyles.badgePorVencer]}>
+                <Text style={[suggStyles.badgeText, { color: isVencido ? '#C0392B' : '#996600' }]}>
+                  {isVencido ? '⚠ Vencido' : `⏱ Vence en ${item.daysLeft} día${item.daysLeft !== 1 ? 's' : ''}`}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={() => onAddSuggestion(item)} style={suggStyles.addBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="add" size={20} color="#5B9BD5" />
+            </TouchableOpacity>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const suggStyles = StyleSheet.create({
+  container: { marginTop: 24, borderWidth: 1.5, borderColor: '#F0C060', borderRadius: 16, backgroundColor: '#FFFDF5', overflow: 'hidden' },
+  header: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    padding: 14, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: '#F0E8C0',
+    backgroundColor: '#FFF8E6',
+  },
+  iconWrap: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#FFE8B0', alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  title: { fontSize: 14, fontWeight: '700', color: '#7A5200' },
+  subtitle: { fontSize: 12, color: '#A07020', marginTop: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14 },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: '#F0E8C0' },
+  emoji: { fontSize: 26 },
+  info: { flex: 1, gap: 4 },
+  name: { fontSize: 14, fontWeight: '700', color: '#222' },
+  brand: { fontSize: 12, color: '#4ABCB0', fontWeight: '500' },
+  badge: { alignSelf: 'flex-start', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeVencido: { backgroundColor: '#FDDEDE' },
+  badgePorVencer: { backgroundColor: '#FFF3CD' },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+  addBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: '#E8F4FF', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: '#A8CFEE',
+  },
+});
+
+// ------- Shopping List Screen -------
+function ListaDeComprasScreen({
+  items,
+  stockItems,
+  onRemove,
+  onChangeQuantity,
+  onAddManual,
+  onAddSuggestion,
+}: {
+  items: ShoppingListItem[];
+  stockItems: StockItem[];
+  onRemove: (id: string) => void;
+  onChangeQuantity: (id: string, delta: number) => void;
+  onAddManual: (item: Omit<ShoppingListItem, 'id'>) => void;
+  onAddSuggestion: (item: StockItem) => void;
+}) {
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      {items.length === 0 ? (
+        <View style={styles.placeholderContainer}>
+          <Ionicons name="cart-outline" size={64} color="#C8DCEF" />
+          <Text style={styles.placeholderTitle}>Lista de compras</Text>
+          <Text style={styles.placeholderText}>Añade productos desde el Stock con el botón 🛒.</Text>
+        </View>
+      ) : (
+        <>
+          <Text style={styles.sectionTitle}>Lista de compras</Text>
+          <Text style={styles.listaSubtitle}>{items.length} producto{items.length !== 1 ? 's' : ''}</Text>
+          {items.map((item) => (
+            <View key={item.id} style={styles.listaCard}>
+              <Text style={styles.listaEmoji}>{item.emoji}</Text>
+              <View style={styles.listaInfo}>
+                <Text style={styles.listaName}>{item.name}</Text>
+                {!!item.brand && <Text style={styles.listaBrand}>{item.brand}</Text>}
+              </View>
+              <View style={styles.qtyControl}>
+                <TouchableOpacity onPress={() => onChangeQuantity(item.id, -1)} style={styles.qtyButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="remove" size={16} color="#5B9BD5" />
+                </TouchableOpacity>
+                <Text style={styles.qtyText}>{item.quantity}</Text>
+                <TouchableOpacity onPress={() => onChangeQuantity(item.id, +1)} style={styles.qtyButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="add" size={16} color="#5B9BD5" />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity onPress={() => onRemove(item.id)} style={styles.listaRemoveButton} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="trash-outline" size={18} color="#C0392B" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </>
+      )}
+
+      <AgregarOtrosForm onAdd={onAddManual} />
+      <SuggestionsSection stockItems={stockItems} shoppingList={items} onAddSuggestion={onAddSuggestion} />
+    </ScrollView>
+  );
+}
+
 // ------- Main Screen -------
 export default function StockScreen() {
   const { user } = useAuth();
+  const [mode, setMode] = useState<ScreenMode>('stock');
   const [activeFilter, setActiveFilter] = useState<'todos' | 'buen_estado' | 'por_vencer' | 'vencidos'>('todos');
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,12 +526,16 @@ export default function StockScreen() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
   const [storageAreaId, setStorageAreaId] = useState('');
 
+  const [cartStates, setCartStates] = useState<Record<string, CartButtonState>>({});
+  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
+
   async function loadInventory(areaId: string) {
     setLoading(true);
     setError(null);
     try {
       const data = await fetchInventory(user?.user_id ?? '', areaId, user?.access_token);
       setItems(data.map(mapToStockItem));
+      setCartStates({});
     } catch (e: any) {
       setError(e.message ?? 'Error al cargar el inventario');
     } finally {
@@ -165,7 +543,65 @@ export default function StockScreen() {
     }
   }
 
-  // Load households on mount
+  const handleAddToCart = useCallback(async (item: StockItem) => {
+    if (shoppingList.some((s) => s.id === item.id)) {
+      setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
+      return;
+    }
+    setCartStates((prev) => ({ ...prev, [item.id]: 'loading' }));
+    try {
+      await addToShoppingList({
+        householdId: selectedHouseholdId,
+        inventoryItemId: item.id,
+        name: item.name,
+        brand: item.brand,
+        emoji: item.emoji,
+        accessToken: user?.access_token,
+      });
+      setShoppingList((prev) => [
+        ...prev,
+        { id: item.id, emoji: item.emoji, name: item.name, brand: item.brand, quantity: 1 },
+      ]);
+      setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
+    } catch {
+      setCartStates((prev) => ({ ...prev, [item.id]: 'error' }));
+      setTimeout(() => {
+        setCartStates((prev) => ({ ...prev, [item.id]: 'idle' }));
+      }, 2000);
+    }
+  }, [selectedHouseholdId, user?.access_token, shoppingList]);
+
+  const handleRemoveFromList = useCallback((id: string) => {
+    setShoppingList((prev) => prev.filter((i) => i.id !== id));
+    setCartStates((prev) => ({ ...prev, [id]: 'idle' }));
+  }, []);
+
+  const handleChangeQuantity = useCallback((id: string, delta: number) => {
+    setShoppingList((prev) => {
+      const next = prev
+        .map((i) => i.id === id ? { ...i, quantity: i.quantity + delta } : i)
+        .filter((i) => i.quantity > 0);
+      if (!next.find((i) => i.id === id)) {
+        setCartStates((cs) => ({ ...cs, [id]: 'idle' }));
+      }
+      return next;
+    });
+  }, []);
+
+  const handleAddManual = useCallback((item: Omit<ShoppingListItem, 'id'>) => {
+    const id = `manual_${Date.now()}`;
+    setShoppingList((prev) => [...prev, { ...item, id }]);
+  }, []);
+
+  const handleAddSuggestion = useCallback((item: StockItem) => {
+    if (shoppingList.some((s) => s.id === item.id)) return;
+    setShoppingList((prev) => [
+      ...prev,
+      { id: item.id, emoji: item.emoji, name: item.name, brand: item.brand, quantity: 1 },
+    ]);
+    setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
+  }, [shoppingList]);
+
   useEffect(() => {
     fetchHouseholds(user?.user_id ?? '', user?.access_token).then((hhs) => {
       if (hhs.length > 0) {
@@ -176,7 +612,6 @@ export default function StockScreen() {
     }).catch(() => {});
   }, []);
 
-  // When household changes, load its first storage area
   useEffect(() => {
     if (!selectedHouseholdId) return;
     fetchStorageAreas(selectedHouseholdId).then((areas) => {
@@ -194,7 +629,6 @@ export default function StockScreen() {
     });
   }, [selectedHouseholdId]);
 
-  // When storage area changes, load inventory
   useEffect(() => {
     if (!storageAreaId) return;
     loadInventory(storageAreaId);
@@ -211,10 +645,10 @@ export default function StockScreen() {
   });
 
   const FILTERS: { key: typeof activeFilter; label: string }[] = [
-    { key: 'todos', label: 'Todos' },
+    { key: 'todos',       label: 'Todos' },
     { key: 'buen_estado', label: 'Buen estado' },
-    { key: 'por_vencer', label: 'Por vencer' },
-    { key: 'vencidos', label: 'Vencidos' },
+    { key: 'por_vencer',  label: 'Por vencer' },
+    { key: 'vencidos',    label: 'Vencidos' },
   ];
 
   return (
@@ -225,47 +659,67 @@ export default function StockScreen() {
         onSelect={setSelectedHouseholdId}
       />
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>Resumen del hogar</Text>
+      <ModeSwitcher mode={mode} onChange={setMode} />
 
-        <View style={styles.statsGrid}>
-          <StatCard value={stats.total} label="Total de productos" iconName="cart-outline" iconColor="#5B9BD5" borderColor="#A8D0F0" bgColor="#E8F4FF" />
-          <StatCard value={stats.bienEstado} label="En buen estado" iconName="checkmark-circle-outline" iconColor="#27AE60" borderColor="#80CC90" bgColor="#DFF5E3" />
-          <StatCard value={stats.porVencer} label="Por vencer (≤30 días)" iconName="alarm-outline" iconColor="#E07820" borderColor="#F0C060" bgColor="#FFF3CD" />
-          <StatCard value={stats.vencidos} label="Vencidos" iconName="close-circle-outline" iconColor="#C0392B" borderColor="#E07070" bgColor="#FDDEDE" />
-        </View>
+      {mode === 'lista' ? (
+        <ListaDeComprasScreen
+          items={shoppingList}
+          stockItems={items}
+          onRemove={handleRemoveFromList}
+          onChangeQuantity={handleChangeQuantity}
+          onAddManual={handleAddManual}
+          onAddSuggestion={handleAddSuggestion}
+        />
+      ) : (
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          <Text style={styles.sectionTitle}>Resumen del hogar</Text>
 
-        <Text style={styles.sectionTitle}>Todos los productos</Text>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll} contentContainerStyle={styles.filtersContent}>
-          {FILTERS.map((f) => (
-            <TouchableOpacity
-              key={f.key}
-              style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
-              onPress={() => setActiveFilter(f.key)}
-            >
-              <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {loading ? (
-          <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => storageAreaId && loadInventory(storageAreaId)}>
-              <Text style={styles.retryText}>Reintentar</Text>
-            </TouchableOpacity>
+          <View style={styles.statsGrid}>
+            <StatCard value={stats.total}      label="Total de productos"    iconName="cart-outline"             iconColor="#5B9BD5" borderColor="#A8D0F0" bgColor="#E8F4FF" />
+            <StatCard value={stats.bienEstado} label="En buen estado"        iconName="checkmark-circle-outline" iconColor="#27AE60" borderColor="#80CC90" bgColor="#DFF5E3" />
+            <StatCard value={stats.porVencer}  label="Por vencer (≤30 días)" iconName="alarm-outline"            iconColor="#E07820" borderColor="#F0C060" bgColor="#FFF3CD" />
+            <StatCard value={stats.vencidos}   label="Vencidos"              iconName="close-circle-outline"     iconColor="#C0392B" borderColor="#E07070" bgColor="#FDDEDE" />
           </View>
-        ) : filtered.length === 0 ? (
-          <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
-        ) : (
-          filtered.map((item) => <ProductCard key={item.id} item={item} />)
-        )}
-      </ScrollView>
+
+          <Text style={styles.sectionTitle}>Todos los productos</Text>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll} contentContainerStyle={styles.filtersContent}>
+            {FILTERS.map((f) => (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
+                onPress={() => setActiveFilter(f.key)}
+              >
+                <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {loading ? (
+            <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={() => storageAreaId && loadInventory(storageAreaId)}>
+                <Text style={styles.retryText}>Reintentar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filtered.length === 0 ? (
+            <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
+          ) : (
+            filtered.map((item) => (
+              <ProductCard
+                key={item.id}
+                item={item}
+                cartState={cartStates[item.id] ?? 'idle'}
+                onAddToCart={() => handleAddToCart(item)}
+              />
+            ))
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -275,31 +729,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   scroll: { flex: 1 },
   content: { padding: 20, paddingBottom: 40 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 14, marginTop: 4 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 4, marginTop: 4 },
+  listaSubtitle: { fontSize: 13, color: '#888', marginBottom: 16 },
 
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 28,
-  },
-  statCard: {
-    width: '47%',
-    borderWidth: 1.5,
-    borderRadius: 14,
-    padding: 14,
-    backgroundColor: '#fff',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
-  statIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
+  statCard: { width: '47%', borderWidth: 1.5, borderRadius: 14, padding: 14, backgroundColor: '#fff', alignItems: 'flex-start', gap: 6 },
+  statIconWrap: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 2 },
   statValue: { fontSize: 28, fontWeight: '800', color: '#1A1A1A', lineHeight: 32 },
   statLabel: { fontSize: 12, color: '#666', lineHeight: 16 },
 
@@ -310,20 +745,9 @@ const styles = StyleSheet.create({
   filterChipText: { fontSize: 14, color: '#555', fontWeight: '500' },
   filterChipTextActive: { color: '#fff', fontWeight: '700' },
 
-  productCard: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  productTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
+  productCard: { backgroundColor: '#fff', borderWidth: 2, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12 },
+  productTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  productTopRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   productEmoji: { fontSize: 36 },
   spaceChip: { backgroundColor: '#F0F0F0', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
   spaceChipText: { fontSize: 12, color: '#555', fontWeight: '600' },
@@ -337,10 +761,27 @@ const styles = StyleSheet.create({
   statusBadge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   statusText: { fontSize: 13, fontWeight: '700' },
 
+  cartButton: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+
+  listaCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E0ECF8', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 10, gap: 12 },
+  listaEmoji: { fontSize: 30 },
+  listaInfo: { flex: 1 },
+  listaName: { fontSize: 16, fontWeight: '700', color: '#222' },
+  listaBrand: { fontSize: 13, color: '#4ABCB0', fontWeight: '500', marginTop: 2 },
+  listaRemoveButton: { padding: 4 },
+
+  qtyControl: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F0F6FF', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 4 },
+  qtyButton: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#E8F4FF', alignItems: 'center', justifyContent: 'center' },
+  qtyText: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', minWidth: 20, textAlign: 'center' },
+
   loader: { marginTop: 40 },
   errorContainer: { alignItems: 'center', marginTop: 40, gap: 12 },
   errorText: { color: '#C0392B', fontSize: 14, textAlign: 'center' },
   retryButton: { backgroundColor: '#A8CFEE', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 },
   retryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
   emptyText: { textAlign: 'center', color: '#888', fontSize: 15, marginTop: 30 },
+
+  placeholderContainer: { alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 40 },
+  placeholderTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
+  placeholderText: { fontSize: 14, color: '#888', textAlign: 'center' },
 });
