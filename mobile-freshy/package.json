@@ -7,7 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "monitor": "concurrently --names \"EXPO,MONITOR\" --prefix-colors \"cyan,green\" --kill-others-on-fail \"expo start --port 8082\" \"pip install opencv-python openai numpy -q && set PYTHONIOENCODING=utf-8 && python ../tools/space_monitor_test.py\""
+    "preMonitor": "npx kill-port 8081 --silent",
+    "monitor": "concurrently --names \"EXPO,MONITOR\" --prefix-colors \"cyan,green\" \"expo start\" \"pip install opencv-python openai numpy -q && set PYTHONIOENCODING=utf-8 && python ../tools/space_monitor_test.py\""
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
