@@ -1,8 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -19,8 +23,12 @@ import {
   fetchHouseholds,
   fetchStorageAreas,
   calcEstado,
+  deleteInventoryItem,
+  updateInventoryItem,
 } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useShoppingList } from '@/contexts/ShoppingListContext';
+import type { ShoppingListItem } from '@/contexts/ShoppingListContext';
 import type { InventoryItemResponse } from '@/services/api';
 import ProductActionsMenu from '@/components/ProductActionsMenu';
 
@@ -38,25 +46,6 @@ type StockItem = {
   shelfLife: number;
   estado: 'fresco' | 'por_vencer' | 'vencido';
 };
-
-type ShoppingListItem = {
-  id: string;
-  emoji: string;
-  name: string;
-  brand: string;
-  quantity: number;
-};
-
-// ------- Mock addToShoppingList -------
-type AddToShoppingListParams = {
-  householdId: string;
-  inventoryItemId: string;
-  name: string;
-  brand: string;
-  emoji: string;
-  accessToken?: string;
-};
-
 
 // ------- Helpers -------
 function calcDaysLeft(fechaVencimiento: string): number {
@@ -817,6 +806,7 @@ const STOCK_TABS: { key: StockTab; label: string }[] = [
 
 export default function StockScreen() {
   const { user } = useAuth();
+  const { shoppingList, addToList, removeFromList, changeQuantity } = useShoppingList();
   const [activeTab, setActiveTab] = useState<StockTab>('stock');
   const [activeFilter, setActiveFilter] = useState<'todos' | 'buen_estado' | 'por_vencer' | 'vencidos'>('todos');
   const [items, setItems] = useState<StockItem[]>([]);
@@ -827,9 +817,14 @@ export default function StockScreen() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
   const [storageAreaId, setStorageAreaId] = useState('');
 
-  const [cartStates, setCartStates] = useState<Record<string, CartButtonState>>({});
-  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Three-dot menu state
+  const [menuItem, setMenuItem] = useState<StockItem | null>(null);
+  const [editItem, setEditItem] = useState<StockItem | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editExpiry, setEditExpiry] = useState('');
+  const [saving, setSaving] = useState(false);
 
   async function loadInventory(areaId: string, isRefresh = false) {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -842,7 +837,6 @@ export default function StockScreen() {
         return db.localeCompare(da); // más nuevo primero
       });
       setItems(sorted.map(mapToStockItem));
-      if (!isRefresh) setCartStates({});
     } catch (e: any) {
       setError(e.message ?? 'Error al cargar el inventario');
     } finally {
@@ -854,50 +848,91 @@ export default function StockScreen() {
     if (storageAreaId) loadInventory(storageAreaId, true);
   }, [storageAreaId]);
 
-  const handleAddToCart = useCallback(async (item: StockItem) => {
-    if (shoppingList.some((s) => s.id === item.id)) {
-      setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
-      return;
-    }
-    setCartStates((prev) => ({ ...prev, [item.id]: 'loading' }));
+  const handleDelete = useCallback((item: StockItem) => {
+    setMenuItem(null);
+    Alert.alert(
+      'Eliminar producto',
+      `¿Eliminás "${item.name}" del inventario?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar', style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteInventoryItem(item.id, user?.access_token);
+              setItems((prev) => prev.filter((i) => i.id !== item.id));
+            } catch {
+              Alert.alert('Error', 'No se pudo eliminar el producto.');
+            }
+          },
+        },
+      ],
+    );
+  }, [user?.access_token]);
+
+  const openEdit = useCallback((item: StockItem) => {
+    setMenuItem(null);
+    setEditItem(item);
+    setEditName(item.name);
+    // Convert DD/MM/YYYY → DD/MM/YYYY (already formatted) for display
+    setEditExpiry(item.expiryDate === 'Sin fecha' ? '' : item.expiryDate);
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editItem) return;
+    setSaving(true);
     try {
-      await addToShoppingList({
-        householdId: selectedHouseholdId,
-        inventoryItemId: item.id,
-        name: item.name,
-        brand: item.brand,
-        emoji: item.emoji,
-        accessToken: user?.access_token,
-      });
-      setShoppingList((prev) => [
-        ...prev,
-        { id: item.id, emoji: item.emoji, name: item.name, brand: item.brand, quantity: 1 },
-      ]);
-      setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
+      // Convert DD/MM/YYYY → YYYY-MM-DD for the API
+      let isoExpiry: string | undefined;
+      if (editExpiry.trim()) {
+        const parts = editExpiry.trim().split('/');
+        if (parts.length === 3) {
+          const [d, m, y] = parts;
+          isoExpiry = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+      }
+      await updateInventoryItem(
+        editItem.id,
+        { nombre: editName.trim() || undefined, fecha_vencimiento: isoExpiry },
+        user?.access_token,
+      );
+      setItems((prev) => prev.map((i) => {
+        if (i.id !== editItem.id) return i;
+        const newExpiry = isoExpiry ? isoExpiry : i.expiryDate;
+        const daysLeft = isoExpiry ? calcDaysLeft(isoExpiry) : i.daysLeft;
+        return {
+          ...i,
+          name: editName.trim() || i.name,
+          expiryDate: isoExpiry
+            ? (() => { const [y2, m2, d2] = isoExpiry.split('-'); return `${d2}/${m2}/${y2}`; })()
+            : i.expiryDate,
+          daysLeft,
+          estado: calcEstado(isoExpiry ?? (i.expiryDate !== 'Sin fecha' ? i.expiryDate : null)) as StockItem['estado'],
+        };
+      }));
+      setEditItem(null);
     } catch {
-      setCartStates((prev) => ({ ...prev, [item.id]: 'error' }));
-      setTimeout(() => {
-        setCartStates((prev) => ({ ...prev, [item.id]: 'idle' }));
-      }, 2000);
+      Alert.alert('Error', 'No se pudo guardar los cambios.');
+    } finally {
+      setSaving(false);
     }
-  }, [selectedHouseholdId, user?.access_token, shoppingList]);
+  }, [editItem, editName, editExpiry, user?.access_token]);
+
+  const handleAddToCart = useCallback((item: StockItem) => {
+    if (shoppingList.some((s) => s.id === item.id)) {
+      removeFromList(item.id);
+    } else {
+      addToList({ id: item.id, emoji: item.emoji, name: item.name, brand: item.brand });
+    }
+  }, [shoppingList, addToList, removeFromList]);
 
   const handleRemoveFromList = useCallback((id: string) => {
-    setShoppingList((prev) => prev.filter((i) => i.id !== id));
-    setCartStates((prev) => ({ ...prev, [id]: 'idle' }));
-  }, []);
+    removeFromList(id);
+  }, [removeFromList]);
 
   const handleChangeQuantity = useCallback((id: string, delta: number) => {
-    setShoppingList((prev) => {
-      const next = prev
-        .map((i) => i.id === id ? { ...i, quantity: i.quantity + delta } : i)
-        .filter((i) => i.quantity > 0);
-      if (!next.find((i) => i.id === id)) {
-        setCartStates((cs) => ({ ...cs, [id]: 'idle' }));
-      }
-      return next;
-    });
-  }, []);
+    changeQuantity(id, delta);
+  }, [changeQuantity]);
 
   const handleItemDeleted = useCallback((id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
@@ -917,17 +952,13 @@ export default function StockScreen() {
 
   const handleAddManual = useCallback((item: Omit<ShoppingListItem, 'id'>) => {
     const id = `manual_${Date.now()}`;
-    setShoppingList((prev) => [...prev, { ...item, id }]);
-  }, []);
+    addToList({ id, ...item });
+  }, [addToList]);
 
   const handleAddSuggestion = useCallback((item: StockItem) => {
     if (shoppingList.some((s) => s.id === item.id)) return;
-    setShoppingList((prev) => [
-      ...prev,
-      { id: item.id, emoji: item.emoji, name: item.name, brand: item.brand, quantity: 1 },
-    ]);
-    setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
-  }, [shoppingList]);
+    addToList({ id: item.id, emoji: item.emoji, name: item.name, brand: item.brand });
+  }, [shoppingList, addToList]);
 
   useEffect(() => {
     fetchHouseholds(user?.user_id ?? '', user?.access_token).then((hhs) => {
@@ -1065,7 +1096,7 @@ export default function StockScreen() {
             <ProductCard
               key={item.id}
               item={item}
-              cartState={cartStates[item.id] ?? 'idle'}
+              cartState={shoppingList.some(s => s.id === item.id) ? 'added' : 'idle'}
               onAddToCart={() => handleAddToCart(item)}
               token={user?.access_token}
               onDeleted={handleItemDeleted}
@@ -1076,6 +1107,7 @@ export default function StockScreen() {
 
       </ScrollView>
     )}
+
     </View>
   );
 }
@@ -1159,4 +1191,42 @@ const styles = StyleSheet.create({
   placeholderContainer: { alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 40 },
   placeholderTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
   placeholderText: { fontSize: 14, color: '#888', textAlign: 'center' },
+
+  // Three-dot button on card
+  menuDots: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
+
+  // Action menu modal
+  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  menuSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32, gap: 4,
+  },
+  menuTitle: { fontSize: 14, fontWeight: '700', color: '#888', marginBottom: 8, paddingHorizontal: 4 },
+  menuOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 4 },
+  menuOptionText: { fontSize: 16, fontWeight: '600', color: '#222' },
+  menuDivider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 2 },
+
+  // Edit modal
+  editSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32, gap: 8,
+  },
+  editTitle: { fontSize: 18, fontWeight: '800', color: '#1A1A1A', marginBottom: 8 },
+  editLabel: { fontSize: 12, fontWeight: '700', color: '#9AACBC', textTransform: 'uppercase', letterSpacing: 0.5 },
+  editInput: {
+    backgroundColor: '#F5F9FF', borderWidth: 1.5, borderColor: '#D0E8F8',
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, color: '#1A1A1A', marginBottom: 8,
+  },
+  editButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  editCancel: {
+    flex: 1, alignItems: 'center', paddingVertical: 14,
+    borderRadius: 14, backgroundColor: '#F0F0F0',
+  },
+  editCancelText: { fontSize: 15, fontWeight: '700', color: '#666' },
+  editSave: {
+    flex: 1, alignItems: 'center', paddingVertical: 14,
+    borderRadius: 14, backgroundColor: '#A8CFEE',
+  },
+  editSaveText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });

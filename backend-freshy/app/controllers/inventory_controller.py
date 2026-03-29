@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 
 from app.core.supabase import get_supabase_client
-from app.models.inventory import InventoryCreate, InventoryCreateResponse, InventoryItemResponse, AddDetectedItemsRequest
+from app.models.inventory import InventoryCreate, InventoryCreateResponse, InventoryItemResponse, AddDetectedItemsRequest, InventoryPatch
 from app.repositories.catalog_item_repository import CatalogItemRepository
 from app.repositories.inventory_repository import InventoryRepository
 from app.services.inventory_service import InventoryService
@@ -115,3 +115,30 @@ def get_stats(
         "top_productos": top_productos,
         "categorias": categorias,
     }
+
+
+@router.delete(
+    "/{inventory_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete an inventory item",
+)
+def delete_inventory_item(
+    inventory_id: str,
+    service: InventoryService = Depends(get_inventory_service),
+):
+    deleted = service.delete_inventory_item(inventory_id)
+    if not deleted:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Item not found")
+
+
+@router.patch(
+    "/{inventory_id}",
+    summary="Update an inventory item's name and/or expiry date",
+)
+def update_inventory_item(
+    inventory_id: str,
+    body: InventoryPatch,
+    service: InventoryService = Depends(get_inventory_service),
+):
+    return service.update_inventory_item(inventory_id, body.product_name, body.expiry_date)

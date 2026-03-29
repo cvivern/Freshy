@@ -102,6 +102,15 @@ class CatalogItemRepository:
         response = self._db.table(TABLE).insert(payload).execute()
         return response.data[0]
 
+    def update_name(self, item_id: str, name: str) -> dict | None:
+        response = (
+            self._db.table(TABLE)
+            .update({"name": name})
+            .eq("id", item_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+
     def update(self, item_id: UUID, payload: dict) -> dict | None:
         response = (
             self._db.table(TABLE)

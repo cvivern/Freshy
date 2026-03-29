@@ -29,12 +29,41 @@ class InventoryRepository:
             self._db.table(INVENTORY_TABLE)
             .select(
                 "id, expiry_date, freshness_state, quantity, unit, entry_date, "
-                "catalog_items(name, category, marca, emoji)"
+                "catalog_item_id, catalog_items(name, category, marca, emoji)"
             )
             .eq("storage_area_id", str(storage_area_id))
             .execute()
         )
         return response.data
+
+    def get_by_id(self, inventory_id: str) -> dict | None:
+        response = (
+            self._db.table(INVENTORY_TABLE)
+            .select("id, catalog_item_id, expiry_date, quantity, unit")
+            .eq("id", inventory_id)
+            .maybe_single()
+            .execute()
+        )
+        return response.data if response else None
+
+    def delete_by_id(self, inventory_id: str) -> bool:
+        response = (
+            self._db.table(INVENTORY_TABLE)
+            .delete()
+            .eq("id", inventory_id)
+            .execute()
+        )
+        return len(response.data) > 0
+
+    def update_expiry(self, inventory_id: str, expiry_date: str | None) -> dict | None:
+        payload = {"expiry_date": expiry_date}
+        response = (
+            self._db.table(INVENTORY_TABLE)
+            .update(payload)
+            .eq("id", inventory_id)
+            .execute()
+        )
+        return response.data[0] if response.data else None
 
     def create(self, payload: dict) -> dict:
         response = self._db.table(INVENTORY_TABLE).insert(payload).execute()

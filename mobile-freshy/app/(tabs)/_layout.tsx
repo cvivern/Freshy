@@ -32,7 +32,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="stock"
         options={{
-          title: 'Stock',
+          title: 'Inventario',
           tabBarIcon: ({ color }) => <TabIcon name="grid-outline" color={color} />,
         }}
       />
