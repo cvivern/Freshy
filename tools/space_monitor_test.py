@@ -46,6 +46,23 @@ MONITOR_USER_ID = "a4362c90-a015-4030-917a-8771200c0d56"
 STORAGE_AREA_ID = ""
 
 
+def wait_for_backend(max_wait: int = 60) -> bool:
+    """Espera hasta que el backend local esté listo. Reintenta cada 2s hasta max_wait segundos."""
+    import urllib.request
+    url = f"{BACKEND_URL}/health"
+    print(f"⏳  Esperando que el backend levante en {BACKEND_URL} ...")
+    for i in range(max_wait // 2):
+        try:
+            with urllib.request.urlopen(url, timeout=2):
+                print(f"✅  Backend listo.")
+                return True
+        except Exception:
+            time.sleep(2)
+            print(f"   ... ({(i+1)*2}s)", end="\r")
+    print(f"\n❌  El backend no respondió en {max_wait}s. Asegurate de que esté corriendo.")
+    return False
+
+
 def fetch_active_camera_area() -> str:
     """Fetches the storage_area_id of the active camera for MONITOR_USER_ID."""
     import urllib.request
@@ -103,7 +120,10 @@ def send_to_backend(before_b64: str, after_b64: str,
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.loads(r.read().decode())
     except urllib.error.HTTPError as e:
-        detail = e.read().decode()
+        try:
+            detail = e.read().decode()
+        except Exception:
+            detail = "(no detail)"
         return {"accion": "error", "descripcion": f"HTTP {e.code}: {detail}",
                 "producto_nombre": "?", "producto_emoji": "❓", "confianza": 0.0}
     except Exception as e:
@@ -181,6 +201,8 @@ def draw_overlay(frame: np.ndarray, state: dict) -> np.ndarray:
 
 def main():
     global STORAGE_AREA_ID
+    if not wait_for_backend(max_wait=60):
+        return
     STORAGE_AREA_ID = fetch_active_camera_area()
 
     cap = cv2.VideoCapture(CAMERA_INDEX)
