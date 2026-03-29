@@ -366,7 +366,7 @@ export default function AddScreen() {
         Alert.alert('No se pudo guardar', msg);
       }
     } else {
-      setRestock((p) => p ? { ...p, dates: newDates, currentDate: '', currentIndex: p.currentIndex + 1 } : p);
+      setRestock((p) => p ? { ...p, dates: newDates, currentDate: newDates[newDates.length - 1], currentIndex: p.currentIndex + 1 } : p);
     }
   }
 
@@ -1184,16 +1184,41 @@ export default function AddScreen() {
                 (() => {
                   const _d = restock?.currentDate ?? '';
                   const _m = _d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-                  const isValidDate = !!_m && +_m[2] >= 1 && +_m[2] <= 12 && +_m[1] >= 1 && +_m[1] <= 31 && +_m[3] >= 2000;
+                  const isValidDate =
+                    !!_m &&
+                    +_m[2] >= 1 && +_m[2] <= 12 &&
+                    +_m[1] >= 1 && +_m[1] <= 31 &&
+                    +_m[3] >= 2000;
+
+                  const isFirstUnit = (restock?.dates.length ?? 0) === 0;
+                  const hasDate = _d.length > 0;
+
+                  const buttonText = !hasDate && !isFirstUnit
+                    ? 'Misma fecha'
+                    : (restock && restock.dates.length + 1 >= parseInt(restock.qty, 10)
+                        ? 'Guardar'
+                        : 'Siguiente');
+
                   return (
                     <TouchableOpacity
-                      style={[styles.primaryBtn, styles.btnFlex, !isValidDate && styles.btnDisabled]}
-                      onPress={handleRestockDateNext}
-                      disabled={!isValidDate}
+                      style={[
+                        styles.primaryBtn,
+                        styles.btnFlex,
+                        isFirstUnit && !isValidDate && styles.btnDisabled
+                      ]}
+                      onPress={() => {
+                        if (!hasDate && !isFirstUnit) {
+                          // usar la última fecha ingresada
+                          const lastDate = restock.dates[restock.dates.length - 1];
+                          setRestock(p => p ? { ...p, currentDate: lastDate } : p);
+                        }
+                        handleRestockDateNext();
+                      }}
+                      disabled={isFirstUnit && !isValidDate}
                     >
                       <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
                       <Text style={styles.primaryBtnText}>
-                        {restock && restock.dates.length + 1 >= parseInt(restock.qty, 10) ? 'Guardar' : 'Siguiente'}
+                        {buttonText}
                       </Text>
                     </TouchableOpacity>
                   );
