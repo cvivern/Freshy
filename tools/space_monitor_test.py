@@ -25,15 +25,18 @@ Flujo automático:
 import cv2
 import base64
 import json
+import os
 import time
 import threading
 import collections
 import numpy as np
 from datetime import datetime
+from pathlib import Path
+from dotenv import load_dotenv
 from openai import OpenAI
 
-
-OPENAI_API_KEY = "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"
+load_dotenv(Path(__file__).parent / ".env")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
