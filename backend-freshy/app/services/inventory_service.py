@@ -54,7 +54,7 @@ class InventoryService:
 
     def get_inventory(
         self,
-        storage_area_id: UUID,
+        storage_area_id: UUID | None,
         user_id: str,
         *,
         categoria: str | None = None,
@@ -70,7 +70,10 @@ class InventoryService:
                 detail="storage_area does not belong to this user.",
             )
 
-        rows = self._repo.get_by_storage_area(storage_area_id)
+        if (not owner) and (user_id is not None):
+            rows = [item for storage_area_id in self._repo.get_storage_area_ids_by_owner(user_id) for item in self._repo.get_by_storage_area(storage_area_id)]
+        else:
+            rows = self._repo.get_by_storage_area(storage_area_id)
         items = [self._map_row(row) for row in rows]
 
         # Apply optional filters in-memory (hackathon scale)

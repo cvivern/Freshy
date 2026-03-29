@@ -42,7 +42,21 @@ async def identify_image(file: UploadFile = File(...)):
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail="La imagen supera el límite de 10 MB.",
         )
-    return image_bytes
+
+    service = OpenAIDetectionService()
+    try:
+        result = service.analyze(image_bytes)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"OpenAI analysis failed: {exc}",
+        )
+
+    # Map to {detections: [{label, confidence}]} format expected by the mobile app
+    if result.get("type") in ("fruit", "vegetable"):
+        return {"detections": [{"label": result.get("name", "desconocido"), "confidence": 1.0}]}
+
+    return {"detections": []}
 
 
 @router.post(

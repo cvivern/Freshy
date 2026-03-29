@@ -40,13 +40,25 @@ class InventoryRepository:
         response = self._db.table(INVENTORY_TABLE).insert(payload).execute()
         return response.data[0]
 
-    def get_storage_area_owner(self, storage_area_id: UUID) -> str | None:
+    def get_storage_area_ids_by_owner(self, user_id: str) -> list[UUID]:
+        """Returns all storage_area IDs that belong to households owned by the given user."""
+        response = (
+            self._db.table(STORAGE_AREAS_TABLE)
+            .select("id, households!inner(owner_id)")
+            .eq("households.owner_id", user_id)
+            .execute()
+        )
+        return [row["id"] for row in (response.data or [])]
+
+    def get_storage_area_owner(self, storage_area_id: UUID | None) -> str | None:
         """Returns the owner_id (profile_id) that owns the storage_area, or None.
 
         Note: .maybe_single() returns None (not a response object) when there
         are no matching rows in some versions of postgrest-py, so we guard
         against that explicitly before accessing .data.
         """
+        if storage_area_id is None:
+            return None
         response = (
             self._db.table(STORAGE_AREAS_TABLE)
             .select("households(owner_id)")

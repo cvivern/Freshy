@@ -46,7 +46,7 @@ def add_inventory_item(
 )
 def list_inventory(
     user_id: str = Query(..., description="Profile ID of the requesting user"),
-    storage_area_id: UUID = Query(..., description="UUID of the storage area"),
+    storage_area_id: UUID  | None = Query(None, description="UUID of the storage area"),
     categoria: str | None = Query(None, description="Filter by category (partial match)"),
     nombre: str | None = Query(None, description="Filter by product name (partial match)"),
     marca: str | None = Query(None, description="Filter by brand (partial match)"),
