@@ -29,14 +29,11 @@ import time
 import threading
 import collections
 import numpy as np
-from openai import OpenAI
 from datetime import datetime
 
 # ── Configuración ──────────────────────────────────────────────────────────────
-OPENAI_API_KEY = "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"
-
-# URL del backend
-BACKEND_URL = "https://backend-freshy.vercel.app"
+# URL del backend — local tiene prioridad (más rápido y tiene las env vars)
+BACKEND_URL = "http://localhost:8000"
 
 # Usuario activo (el mismo que está logueado en la app)
 # Para ver tu user_id: abrí la app → Perfil → el ID aparece debajo del nombre
@@ -47,6 +44,23 @@ MONITOR_USER_ID = "a4362c90-a015-4030-917a-8771200c0d56"
 
 # Se auto-completa al inicio consultando la cámara activa del usuario
 STORAGE_AREA_ID = ""
+
+
+def wait_for_backend(max_wait: int = 60) -> bool:
+    """Espera hasta que el backend local esté listo. Reintenta cada 2s hasta max_wait segundos."""
+    import urllib.request
+    url = f"{BACKEND_URL}/health"
+    print(f"⏳  Esperando que el backend levante en {BACKEND_URL} ...")
+    for i in range(max_wait // 2):
+        try:
+            with urllib.request.urlopen(url, timeout=2):
+                print(f"✅  Backend listo.")
+                return True
+        except Exception:
+            time.sleep(2)
+            print(f"   ... ({(i+1)*2}s)", end="\r")
+    print(f"\n❌  El backend no respondió en {max_wait}s. Asegurate de que esté corriendo.")
+    return False
 
 
 def fetch_active_camera_area() -> str:
@@ -73,8 +87,6 @@ BUFFER_SECONDS     = 1.5    # cuántos segundos de frames guardar (para el "ante
 CAMERA_INDEX       = 0      # 0 = cámara principal
 # ───────────────────────────────────────────────────────────────────────────────
 
-client = OpenAI(api_key=OPENAI_API_KEY)
-
 
 def frame_to_b64(frame: np.ndarray, quality: int = 60) -> str:
     """Convierte un frame OpenCV a base64 JPEG."""
@@ -82,97 +94,38 @@ def frame_to_b64(frame: np.ndarray, quality: int = 60) -> str:
     return base64.b64encode(buf).decode("utf-8")
 
 
-def fetch_inventory(storage_area_id: str) -> list[dict]:
-    """Obtiene el inventario actual del área desde Supabase."""
+def send_to_backend(before_b64: str, after_b64: str,
+                    storage_area_id: str, user_id: str) -> dict:
+    """
+    Manda los dos frames al backend. El backend:
+      1. Consulta el inventario real de la DB
+      2. Llama a GPT-4o con ese contexto (matchea productos exactos)
+      3. Incrementa/decrementa cantidad SOLO si el producto existe en DB
+      4. Inserta en monitor_events → Supabase Realtime → toast en el celular
+    """
     import urllib.request, urllib.error
-    url = f"{BACKEND_URL}/api/v1/inventory/?storage_area_id={storage_area_id}"
+    url  = f"{BACKEND_URL}/api/v1/monitor/analyze"
+    body = json.dumps({
+        "frame_before_b64": before_b64,
+        "frame_after_b64":  after_b64,
+        "storage_area_id":  storage_area_id,
+        "user_id":          user_id,
+        "auto_register":    True,
+    }).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST", headers={
+        "Content-Type": "application/json",
+        "Accept":        "application/json",
+    })
     try:
-        req = urllib.request.Request(url, headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=5) as r:
+        with urllib.request.urlopen(req, timeout=30) as r:
             return json.loads(r.read().decode())
-    except Exception:
-        return []
-
-
-def build_product_list(items: list[dict]) -> str:
-    if not items:
-        return "(No hay productos registrados en este espacio todavía.)"
-    lines = []
-    for p in items:
-        emoji = p.get("emoji") or p.get("producto_emoji") or "📦"
-        name  = p.get("name") or p.get("nombre") or "?"
-        brand = p.get("brand") or ""
-        qty   = p.get("quantity") or p.get("cantidad") or "?"
-        pid   = p.get("id", "")
-        line  = f"  - id={pid} | {emoji} {name}"
-        if brand:
-            line += f" — {brand}"
-        line += f" (stock: {qty})"
-        lines.append(line)
-    return "\n".join(lines)
-
-
-def analyze_with_gpt4v(frame_before: np.ndarray, frame_after: np.ndarray,
-                        storage_area_id: str = "") -> dict:
-    """Manda dos frames a GPT-4o (con lista de inventario) y devuelve qué producto entró/salió."""
-    b64_before = frame_to_b64(frame_before)
-    b64_after  = frame_to_b64(frame_after)
-
-    # Traer inventario actual para que GPT-4o matchee con productos reales
-    known = fetch_inventory(storage_area_id) if storage_area_id else []
-    product_section = ""
-    if known:
-        product_section = f"""
-INVENTARIO ACTUAL DE ESTE ESPACIO (intentá matchear con uno de estos):
-{build_product_list(known)}
-
-Si identificás el producto en las imágenes, devolvé su id exacto en "inventory_item_id".
-Si no coincide con ninguno, devolvé null.
-"""
-
-    prompt = f"""Sos un sistema de detección de inventario doméstico.
-Compará estas dos imágenes tomadas con una cámara fija.
-
-Imagen 1: ANTES del movimiento
-Imagen 2: DESPUÉS del movimiento
-{product_section}
-Detectá si algún producto u objeto:
-- Fue RETIRADO (está en imagen 1 pero NO en imagen 2) → accion = "salida"
-- Fue AGREGADO  (NO está en imagen 1 pero SÍ en imagen 2) → accion = "entrada"
-- No cambió nada relevante → accion = "ninguno"
-
-Respondé SOLO con JSON válido, sin markdown ni texto extra:
-{{
-  "accion": "salida" | "entrada" | "ninguno",
-  "inventory_item_id": "<id de la lista o null>",
-  "producto_nombre": "nombre exacto (de la lista si matchea, sino tu descripción)",
-  "producto_emoji": "emoji representativo",
-  "cantidad": 1,
-  "confianza": 0.0,
-  "descripcion": "descripción breve de lo que cambió"
-}}"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/jpeg;base64,{b64_before}", "detail": "low"}},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/jpeg;base64,{b64_after}",  "detail": "low"}},
-                ],
-            }],
-            max_tokens=350,
-        )
-        raw = response.choices[0].message.content.strip()
-        if raw.startswith("```"):
-            raw = "\n".join(raw.split("\n")[1:])
-            if raw.endswith("```"):
-                raw = raw[:-3]
-        return json.loads(raw)
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read().decode()
+        except Exception:
+            detail = "(no detail)"
+        return {"accion": "error", "descripcion": f"HTTP {e.code}: {detail}",
+                "producto_nombre": "?", "producto_emoji": "❓", "confianza": 0.0}
     except Exception as e:
         return {"accion": "error", "descripcion": str(e),
                 "producto_nombre": "?", "producto_emoji": "❓", "confianza": 0.0}
@@ -248,6 +201,8 @@ def draw_overlay(frame: np.ndarray, state: dict) -> np.ndarray:
 
 def main():
     global STORAGE_AREA_ID
+    if not wait_for_backend(max_wait=60):
+        return
     STORAGE_AREA_ID = fetch_active_camera_area()
 
     cap = cv2.VideoCapture(CAMERA_INDEX)
@@ -287,25 +242,38 @@ def main():
 
     def run_analysis(before, after, area_id=""):
         state["status"] = "analyzing"
-        result = analyze_with_gpt4v(before, after, area_id)
+        before_b64 = frame_to_b64(before)
+        after_b64  = frame_to_b64(after)
+
+        print(f"\n🤖  [{datetime.now().strftime('%H:%M:%S')}] Enviando al backend para análisis...")
+        result = send_to_backend(before_b64, after_b64, area_id, MONITOR_USER_ID)
+
         state["last_result"] = result
-        state["status"] = "result"
+        state["status"] = "result" if result.get("accion") != "error" else "error"
         sm["analyzing"] = False
 
-        accion = result.get("accion", "ninguno")
-        nombre = result.get("producto_nombre", "?")
-        emoji  = result.get("producto_emoji", "")
-        conf   = int(result.get("confianza", 0) * 100)
-        desc   = result.get("descripcion", "")
+        accion    = result.get("accion", "ninguno")
+        nombre    = result.get("producto_nombre", "?")
+        emoji     = result.get("producto_emoji", "")
+        conf      = int(result.get("confianza", 0) * 100)
+        desc      = result.get("descripcion", "")
+        item_id   = result.get("inventory_item_id")
+        restante  = result.get("cantidad_restante")
 
-        if accion == "ninguno":
-            print(f"\n🔍  [{datetime.now().strftime('%H:%M:%S')}] Sin cambios relevantes.")
+        if accion == "error":
+            print(f"   ❌ Error: {desc}")
+        elif accion == "ninguno":
+            print(f"   🔍 Sin cambios relevantes.")
         else:
-            arrow = "📤 SALIÓ" if accion == "salida" else "📥 ENTRÓ"
-            item_id = result.get("inventory_item_id")
-            match_str = f"  ✅ match en DB: {item_id}" if item_id else "  ⚠️  sin match en DB"
-            print(f"\n{arrow}  {emoji} {nombre}  (confianza {conf}%){match_str}")
+            arrow     = "📤 SALIÓ" if accion == "salida" else "📥 ENTRÓ"
+            match_str = f"✅ match en DB (id: {item_id})" if item_id else "⚠️  sin match en DB (no se actualiza stock)"
+            qty_str   = f" — quedan {restante}" if restante is not None else ""
+            print(f"\n   {arrow}  {emoji} {nombre}  ({conf}% confianza)  {match_str}{qty_str}")
             print(f"   → {desc}")
+            if conf >= 55:
+                print(f"   📱 Notificación enviada al celular via Supabase Realtime")
+            else:
+                print(f"   ⚠️  Confianza baja ({conf}%) — no se notifica al celular")
 
     while True:
         ret, frame = cap.read()

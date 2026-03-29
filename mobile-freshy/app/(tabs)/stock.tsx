@@ -21,6 +21,7 @@ import {
 } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import type { InventoryItemResponse } from '@/services/api';
+import ProductActionsMenu from '@/components/ProductActionsMenu';
 
 // ------- Types -------
 type CartButtonState = 'idle' | 'loading' | 'added' | 'error';
@@ -146,8 +147,11 @@ function StatCard({ value, label, iconName, iconColor, borderColor, bgColor }: {
 }
 
 // ------- Product Card -------
-function ProductCard({ item, cartState, onAddToCart }: {
+function ProductCard({ item, cartState, onAddToCart, token, onDeleted, onUpdated }: {
   item: StockItem; cartState: CartButtonState; onAddToCart: () => void;
+  token?: string | null;
+  onDeleted: (id: string) => void;
+  onUpdated: (id: string, fields: { nombre?: string; marca?: string; fecha_vencimiento?: string }) => void;
 }) {
   const status = getStatus(item.estado);
   const progress = Math.min(1, Math.max(0, (item.shelfLife - item.daysLeft) / item.shelfLife));
@@ -161,6 +165,12 @@ function ProductCard({ item, cartState, onAddToCart }: {
             <Text style={styles.spaceChipText}>{item.space}</Text>
           </View>
           <CartButton state={cartState} onPress={onAddToCart} />
+          <ProductActionsMenu
+            item={{ id: item.id, nombre: item.name, marca: item.brand, fecha_vencimiento: item.expiryDate, emoji: item.emoji }}
+            token={token}
+            onDeleted={onDeleted}
+            onUpdated={(id, fields) => onUpdated(id, fields as any)}
+          />
         </View>
       </View>
       <Text style={styles.productName}>{item.name}</Text>
@@ -562,6 +572,22 @@ export default function StockScreen() {
     });
   }, []);
 
+  const handleItemDeleted = useCallback((id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+  }, []);
+
+  const handleItemUpdated = useCallback((id: string, fields: { nombre?: string; marca?: string; fecha_vencimiento?: string }) => {
+    setItems((prev) => prev.map((i) => {
+      if (i.id !== id) return i;
+      return {
+        ...i,
+        name: fields.nombre ?? i.name,
+        brand: fields.marca ?? i.brand,
+        expiryDate: fields.fecha_vencimiento ? fields.fecha_vencimiento.split('-').reverse().join('/') : i.expiryDate,
+      };
+    }));
+  }, []);
+
   const handleAddManual = useCallback((item: Omit<ShoppingListItem, 'id'>) => {
     const id = `manual_${Date.now()}`;
     setShoppingList((prev) => [...prev, { ...item, id }]);
@@ -667,6 +693,10 @@ export default function StockScreen() {
         <Text style={styles.emptyText}>Recetas próximamente.</Text>
       </ScrollView>
     ) : (
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Text style={styles.emptyText}>Recetas próximamente.</Text>
+      </ScrollView>
+    ) : (
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -716,6 +746,9 @@ export default function StockScreen() {
               item={item}
               cartState={cartStates[item.id] ?? 'idle'}
               onAddToCart={() => handleAddToCart(item)}
+              token={user?.access_token}
+              onDeleted={handleItemDeleted}
+              onUpdated={handleItemUpdated}
             />
           ))
         )}

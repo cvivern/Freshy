@@ -43,7 +43,8 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <TabIcon name="add-circle-outline" color={color} />,
         }}
       />
-      <Tabs.Screen
+      <Tabs.Screen name="scan" options={{ href: null }} />
+<Tabs.Screen
         name="stats"
         options={{
           title: 'Stats',
