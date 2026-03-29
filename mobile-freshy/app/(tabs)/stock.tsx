@@ -749,38 +749,10 @@ export default function StockScreen() {
           )}
         </>
       )}
-      </>
-      )}
-      </ScrollView>
-    </View>
-  );
-}
-
-        {loading ? (
-          <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => storageAreaId && loadInventory(storageAreaId)}>
-              <Text style={styles.retryText}>Reintentar</Text>
-            </TouchableOpacity>
-          </View>
-        ) : filtered.length === 0 ? (
-          <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
-        ) : (
-          filtered.map((item) => (
-            <ProductCard
-              key={item.id}
-              item={item}
-              cartState={cartStates[item.id] ?? 'idle'}
-              onAddToCart={() => handleAddToCart(item)}
-            />
-          ))
-        )}
       </ScrollView>
     )}
-  </View>
-);
+    </View>
+  );
 }
 // ------- Styles -------
 const styles = StyleSheet.create({
