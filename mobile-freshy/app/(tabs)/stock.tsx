@@ -141,8 +141,16 @@ function ProductCard({ item }: { item: StockItem }) {
 }
 
 // ------- Main Screen -------
+type StockTab = 'stock' | 'lista_compras';
+
+const STOCK_TABS: { key: StockTab; label: string }[] = [
+  { key: 'stock', label: 'Stock' },
+  { key: 'lista_compras', label: 'Lista de compras' },
+];
+
 export default function StockScreen() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<StockTab>('stock');
   const [activeFilter, setActiveFilter] = useState<'todos' | 'buen_estado' | 'por_vencer' | 'vencidos'>('todos');
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -225,7 +233,26 @@ export default function StockScreen() {
         onSelect={setSelectedHouseholdId}
       />
 
+      {/* ---- 2-tab bar: Stock / Lista de compras ---- */}
+      <View style={styles.tabBar}>
+        {STOCK_TABS.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
+            onPress={() => setActiveTab(tab.key)}
+          >
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {activeTab === 'lista_compras' ? (
+          <Text style={styles.emptyText}>Lista de compras próximamente.</Text>
+        ) : (
+        <>
         <Text style={styles.sectionTitle}>Resumen del hogar</Text>
 
         <View style={styles.statsGrid}>
@@ -264,6 +291,8 @@ export default function StockScreen() {
           <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
         ) : (
           filtered.map((item) => <ProductCard key={item.id} item={item} />)
+        )}
+        </>
         )}
       </ScrollView>
     </View>
@@ -336,6 +365,34 @@ const styles = StyleSheet.create({
   expiryDate: { fontSize: 15, fontWeight: '700', color: '#222' },
   statusBadge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   statusText: { fontSize: 13, fontWeight: '700' },
+
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderRadius: 999,
+    backgroundColor: '#F0F0F0',
+  },
+  tabItemActive: {
+    backgroundColor: '#A8CFEE',
+  },
+  tabLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+  },
+  tabLabelActive: {
+    color: '#fff',
+  },
 
   loader: { marginTop: 40 },
   errorContainer: { alignItems: 'center', marginTop: 40, gap: 12 },
