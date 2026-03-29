@@ -10,18 +10,18 @@
  *   // Render <MonitorCamera /> anywhere (it's invisible, 1x1 px)
  */
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import React from 'react';
-import { View } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { API_BASE } from '@/services/api';
 import { useMonitor } from '@/contexts/MonitorContext';
 import { supabase } from '@/services/supabase';
 
-const CAPTURE_INTERVAL_MS = 3000;   // take photo every 3 seconds
-const MOTION_THRESHOLD    = 0.04;   // 4% pixel difference = motion
-const MOTION_COOLDOWN_MS  = 2000;   // 2s of calm before "after" frame
+const CAPTURE_INTERVAL_MS = 4000;   // take photo every 4 seconds
+const MOTION_THRESHOLD    = 0.05;   // 5% pixel difference = motion
+const MOTION_COOLDOWN_MS  = 2500;   // 2.5s of calm before "after" frame
 
 type MonitorEvent = {
   accion: 'entrada' | 'salida' | 'ninguno';
@@ -79,6 +79,7 @@ export function useSpaceMonitor({
   const lastMotionTRef  = useRef(0);
   const analyzingRef    = useRef(false);
   const intervalRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [monitorStatus, setMonitorStatus] = useState<'idle' | 'watching' | 'motion' | 'analyzing'>('idle');
 
   const captureAndProcess = useCallback(async () => {
     if (!cameraRef.current || analyzingRef.current || !enabled) return;
@@ -87,12 +88,11 @@ export function useSpaceMonitor({
     try {
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
-        quality: 0.2,
-        skipProcessing: true,
-        shutterSound: false,
+        quality: 0.25,
       });
       b64 = photo?.base64 ?? null;
-    } catch {
+    } catch (e) {
+      console.warn('[SpaceMonitor] takePictureAsync failed:', e);
       return;
     }
     if (!b64) return;
@@ -107,17 +107,17 @@ export function useSpaceMonitor({
     if (hasMotion) {
       lastMotionTRef.current = Date.now();
       if (!inMotionRef.current) {
-        // Save "before" frame (the previous stable frame)
         beforeB64Ref.current = prev;
         inMotionRef.current = true;
+        setMonitorStatus('motion');
       }
     } else {
       if (inMotionRef.current) {
         const elapsed = Date.now() - lastMotionTRef.current;
         if (elapsed >= MOTION_COOLDOWN_MS && beforeB64Ref.current) {
-          // Motion ended → analyze
           inMotionRef.current = false;
           analyzingRef.current = true;
+          setMonitorStatus('analyzing');
 
           const beforeB64 = beforeB64Ref.current;
           const afterB64  = b64;
@@ -169,10 +169,11 @@ export function useSpaceMonitor({
                 }
               }
             }
-          } catch {
-            // Silently ignore network errors
+          } catch (e) {
+            console.warn('[SpaceMonitor] analyze error:', e);
           } finally {
             analyzingRef.current = false;
+            setMonitorStatus('watching');
           }
         }
       }
@@ -181,9 +182,11 @@ export function useSpaceMonitor({
 
   useEffect(() => {
     if (!enabled || !permission?.granted) return;
+    setMonitorStatus('watching');
     intervalRef.current = setInterval(captureAndProcess, CAPTURE_INTERVAL_MS);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      setMonitorStatus('idle');
     };
   }, [enabled, permission?.granted, captureAndProcess]);
 
@@ -242,19 +245,55 @@ export function useSpaceMonitor({
     return () => { supabase.removeChannel(channel); };
   }, [userId, showMonitorToast]);
 
-  // The invisible camera component — caller renders this hidden
+  // Cámara oculta + indicador de estado
   const MonitorCamera = useCallback(() => {
-    if (!permission?.granted || !enabled) return null;
+    if (!enabled) return null;
+
+    const dotColor =
+      monitorStatus === 'analyzing' ? '#FFA500' :
+      monitorStatus === 'motion'    ? '#FF4444' :
+      monitorStatus === 'watching'  ? '#44CC44' : '#888';
+
+    const dotLabel =
+      monitorStatus === 'analyzing' ? 'IA analizando...' :
+      monitorStatus === 'motion'    ? 'Movimiento detectado' :
+      monitorStatus === 'watching'  ? 'Monitor activo' : '';
+
     return React.createElement(
       View,
-      { style: { width: 1, height: 1, opacity: 0, position: 'absolute', top: -10, left: -10 } },
-      React.createElement(CameraView, {
-        ref: cameraRef,
-        style: { width: 1, height: 1 },
-        facing: 'back',
-      })
+      { style: monStyles.wrapper },
+      // Cámara oculta — dentro de bounds, opacity 0
+      permission?.granted
+        ? React.createElement(
+            View,
+            { style: monStyles.cameraWrap },
+            React.createElement(CameraView, {
+              ref: cameraRef,
+              style: monStyles.camera,
+              facing: 'back',
+            })
+          )
+        : null,
+      // Indicador visible
+      monitorStatus !== 'idle'
+        ? React.createElement(
+            View,
+            { style: monStyles.indicator },
+            React.createElement(View, { style: [monStyles.dot, { backgroundColor: dotColor }] }),
+            React.createElement(Text, { style: monStyles.label }, dotLabel)
+          )
+        : null
     );
-  }, [permission?.granted, enabled]);
+  }, [permission?.granted, enabled, monitorStatus]);
 
-  return { MonitorCamera };
+  return { MonitorCamera, monitorStatus };
 }
+
+const monStyles = StyleSheet.create({
+  wrapper:    { position: 'absolute', bottom: 80, right: 12, alignItems: 'flex-end', zIndex: 100 },
+  cameraWrap: { width: 1, height: 1, overflow: 'hidden' },
+  camera:     { width: 1, height: 1 },
+  indicator:  { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  dot:        { width: 7, height: 7, borderRadius: 4 },
+  label:      { color: '#fff', fontSize: 11, fontWeight: '600' },
+});
