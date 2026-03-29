@@ -378,7 +378,7 @@ export default function StatsScreen() {
             onPress={() => selectArea(area.id)}
           >
             <Text style={[styles.tabLabel, selectedAreaId === area.id && styles.tabLabelActive]}>
-              {CLIMATE_EMOJI[area.climate] ?? '📦'} {area.name}
+              {area.name}
             </Text>
           </TouchableOpacity>
         ))}
@@ -490,8 +490,8 @@ const styles = StyleSheet.create({
 
   tabBar: { flexGrow: 0, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#F0F0F0' },
   tabBarContent: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
-  tabItem: { alignItems: 'center', paddingVertical: 9, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#F0F0F0' },
+  tabItem: { alignItems: 'center', paddingVertical: 11, paddingHorizontal: 16, borderRadius: 999, backgroundColor: '#F0F0F0' },
   tabItemActive: { backgroundColor: '#A8CFEE' },
-  tabLabel: { fontSize: 13, fontWeight: '600', color: '#999' },
+  tabLabel: { fontSize: 14, fontWeight: '600', color: '#999' },
   tabLabelActive: { color: '#fff' },
 });
