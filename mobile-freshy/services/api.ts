@@ -375,6 +375,36 @@ export async function addToInventory(payload: AddInventoryPayload, token?: strin
   }
 }
 
+export async function deleteInventoryItem(itemId: string, token?: string | null): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/inventory/${encodeURIComponent(itemId)}`,
+    { method: 'DELETE', headers: authHeaders(token) },
+    10000
+  );
+  if (!response.ok && response.status !== 204) {
+    throw new Error(`Error al borrar el producto (${response.status})`);
+  }
+}
+
+export async function updateInventoryItem(
+  itemId: string,
+  fields: { nombre?: string; marca?: string; fecha_vencimiento?: string; emoji?: string },
+  token?: string | null
+): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/inventory/${encodeURIComponent(itemId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify(fields),
+    },
+    10000
+  );
+  if (!response.ok) {
+    throw new Error(`Error al editar el producto (${response.status})`);
+  }
+}
+
 // ------- Profile -------
 
 export type ProfileMember = { id: string; name: string; email: string };

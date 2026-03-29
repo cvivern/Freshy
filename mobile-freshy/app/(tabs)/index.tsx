@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -24,9 +24,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import type { InventoryItem } from '@/services/api';
 import { scheduleExpiryNotifications } from '@/services/notifications';
 import { useSpaceMonitor } from '@/hooks/useSpaceMonitor';
+import ProductActionsMenu from '@/components/ProductActionsMenu';
 
 type FilterState = 'todos' | 'vence_pronto' | 'buen_estado' | 'vencidos';
 type SortOption = 'vence_primero' | 'vence_ultimo' | 'nombre_az' | 'mas_reciente';
+type CartButtonState = 'idle' | 'loading' | 'added' | 'error';
+
+function CartButton({ state, onPress }: { state: CartButtonState; onPress: () => void }) {
+  const isDisabled = state === 'loading' || state === 'added';
+  const bgColor     = state === 'added' ? '#DFF5E3' : state === 'error' ? '#FDDEDE' : '#E8F4FF';
+  const borderColor = state === 'added' ? '#60B870' : state === 'error' ? '#E07070' : '#A8CFEE';
+  const iconName: React.ComponentProps<typeof Ionicons>['name'] =
+    state === 'added' ? 'checkmark-circle' : state === 'error' ? 'alert-circle-outline' : 'cart-outline';
+  const iconColor = state === 'added' ? '#27AE60' : state === 'error' ? '#C0392B' : '#5B9BD5';
+  return (
+    <TouchableOpacity onPress={onPress} disabled={isDisabled} style={[styles.cartButton, { backgroundColor: bgColor, borderColor }]} activeOpacity={0.75}>
+      {state === 'loading'
+        ? <ActivityIndicator size="small" color="#5B9BD5" />
+        : <Ionicons name={iconName} size={20} color={iconColor} />}
+    </TouchableOpacity>
+  );
+}
 
 const FILTERS = [
   { key: 'todos', label: 'Todos los productos' },
@@ -168,6 +186,7 @@ export default function HomeScreen() {
   const [hogares, setHogares] = useState<HogarOption[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
   const [selectedStorageAreaId, setSelectedStorageAreaId] = useState('');
+  const [cartStates, setCartStates] = useState<Record<string, CartButtonState>>({});
 
   useSpaceMonitor({
     userId: user?.user_id ?? DEFAULT_USER_ID,
@@ -240,6 +259,22 @@ export default function HomeScreen() {
         default: return 0;
       }
     });
+
+  const handleDeleted = useCallback((id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+  }, []);
+
+  const handleUpdated = useCallback((id: string, fields: Partial<InventoryItem>) => {
+    setItems((prev) => prev.map((i) => i.id === id ? { ...i, ...fields } : i));
+  }, []);
+
+  const handleAddToCart = useCallback((item: InventoryItem) => {
+    if (cartStates[item.id] === 'added') return;
+    setCartStates((prev) => ({ ...prev, [item.id]: 'loading' }));
+    setTimeout(() => {
+      setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
+    }, 600);
+  }, [cartStates]);
 
   return (
     <View style={styles.container}>
@@ -324,36 +359,45 @@ export default function HomeScreen() {
         ) : (
           filteredItems.map((item) => {
             const daysLeft = getDaysLeft(item.fecha_vencimiento);
-            const badge = getStatusBadge(daysLeft);
             const estado = calcEstado(item.fecha_vencimiento);
-            const estadoLabel = estado === 'fresco' ? 'Fresco' : estado === 'por_vencer' ? 'Por vencer' : 'Vencido';
-            // Progress: assume shelfLife = 30d fresh, 7d por_vencer, already expired
+            const status = estado === 'vencido'
+              ? { label: 'Vencido',       bg: '#FDDEDE', textColor: '#C0392B', borderColor: '#E07070' }
+              : estado === 'por_vencer'
+              ? { label: 'Por vencer',    bg: '#FFF3CD', textColor: '#996600', borderColor: '#E0C050' }
+              : { label: 'En buen estado', bg: '#DFF5E3', textColor: '#27AE60', borderColor: '#60B870' };
             const shelfLife = estado === 'vencido' ? 1 : estado === 'por_vencer' ? 7 : 30;
             const progress = Math.min(1, Math.max(0, (shelfLife - daysLeft) / shelfLife));
             return (
-              <View key={item.id} style={[styles.foodCard, { borderColor: getBorderColor(daysLeft) }]}>
+              <View key={item.id} style={[styles.foodCard, { borderColor: status.borderColor }]}>
                 <View style={styles.cardTopRow}>
                   <Text style={styles.foodEmoji}>{item.emoji ?? '📦'}</Text>
-                  <Text style={[styles.foodName, { flex: 1 }]}>{item.nombre}</Text>
+                  <View style={styles.cardTopRight}>
+                    {!!item.categoria && (
+                      <View style={styles.spaceChip}>
+                        <Text style={styles.spaceChipText}>{item.categoria}</Text>
+                      </View>
+                    )}
+                    <CartButton state={cartStates[item.id] ?? 'idle'} onPress={() => handleAddToCart(item)} />
+                    <ProductActionsMenu
+                      item={item}
+                      token={user?.access_token}
+                      onDeleted={handleDeleted}
+                      onUpdated={handleUpdated}
+                    />
+                  </View>
                 </View>
-
-                <Text style={styles.foodCategory}>
-                  {item.categoria ?? ''}{item.marca ? ` - ${item.marca}` : ''}
-                </Text>
-
+                <Text style={styles.foodName}>{item.nombre}</Text>
+                {!!item.marca && <Text style={styles.foodBrand}>{item.marca}</Text>}
                 <View style={styles.progressTrack}>
-                  <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: getBorderColor(daysLeft) }]} />
+                  <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: status.borderColor }]} />
                 </View>
-
-                <View style={styles.expiryRow}>
-                  <Text style={styles.expiryLabel}>Vencimiento</Text>
-                  <Text style={styles.expiryDate}>{formatExpiryDate(item.fecha_vencimiento)}</Text>
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={styles.foodState}>📝 {estadoLabel}</Text>
-                  <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.badgeText, { color: badge.textColor }]}>{badge.text}</Text>
+                <View style={styles.productFooter}>
+                  <View>
+                    <Text style={styles.expiryLabel}>Vencimiento</Text>
+                    <Text style={styles.expiryDate}>{formatExpiryDate(item.fecha_vencimiento)}</Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
+                    <Text style={[styles.statusText, { color: status.textColor }]}>{status.label}</Text>
                   </View>
                 </View>
               </View>
@@ -386,19 +430,22 @@ const styles = StyleSheet.create({
   sortChipActive: { backgroundColor: '#A8CFEE' },
   sortChipText: { fontSize: 12, color: '#999', fontWeight: '600' },
   sortChipTextActive: { color: '#fff', fontWeight: '700' },
-  foodCard: { backgroundColor: '#fff', borderWidth: 2, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 14 },
-  cardTopRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4, gap: 10 },
-  foodEmoji: { fontSize: 18 },
-  foodName: { fontSize: 16, fontWeight: '700', color: '#222', marginTop: 2 },
-  foodCategory: { fontSize: 14, color: '#A8CFEE', marginBottom: 8, marginLeft: 35 },
+  foodCard: { backgroundColor: '#fff', borderWidth: 2, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12 },
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  foodEmoji: { fontSize: 36 },
+  cardTopRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  spaceChip: { backgroundColor: '#F0F0F0', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  spaceChipText: { fontSize: 12, color: '#555', fontWeight: '600' },
+  cartButton: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  foodName: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 2 },
+  foodBrand: { fontSize: 13, color: '#4ABCB0', marginBottom: 10, fontWeight: '500' },
   progressTrack: { height: 8, backgroundColor: '#E0E0E0', borderRadius: 4, marginBottom: 8, overflow: 'hidden' },
   progressFill: { height: 8, borderRadius: 4 },
-  expiryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  expiryLabel: { fontSize: 14, color: '#A8CFEE', paddingLeft: 5 },
-  expiryDate: { fontSize: 14, fontWeight: '700', color: '#222' },
-  foodState: { fontSize: 14, color: '#555', marginBottom: 10 },
-  badge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
-  badgeText: { fontSize: 14, fontWeight: '600' },
+  productFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  expiryLabel: { fontSize: 12, color: '#888', marginBottom: 2 },
+  expiryDate: { fontSize: 15, fontWeight: '700', color: '#222' },
+  statusBadge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
+  statusText: { fontSize: 13, fontWeight: '700' },
   errorBox: { alignItems: 'center', marginTop: 40, gap: 12 },
   errorText: { color: '#C0392B', fontSize: 14, textAlign: 'center' },
   retryBtn: { backgroundColor: '#A8CFEE', borderRadius: 20, paddingHorizontal: 24, paddingVertical: 10 },
