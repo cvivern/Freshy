@@ -4,12 +4,12 @@
     "slug": "mobile-freshy",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo_blanco_sin_fondo_grande_arbol.png",
+    "icon": "./assets/images/logo_fondo_azul.png",
     "scheme": "mobilefreshy",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/logo_blanco_sin_fondo_grande_arbol.png",
+      "image": "./assets/images/logo_fondo_azul.png",
       "resizeMode": "contain",
       "backgroundColor": "#A8CFEE"
     },
@@ -18,7 +18,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo_blanco_sin_fondo_grande_arbol.png",
+        "foregroundImage": "./assets/images/logo_fondo_azul.png",
         "backgroundColor": "#A8CFEE"
       },
       "edgeToEdgeEnabled": true,
@@ -35,12 +35,20 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/logo_blanco_sin_fondo_grande_arbol.png",
+          "icon": "./assets/images/logo_fondo_azul.png",
           "color": "#A8CFEE"
         }
       ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/logo_fondo_azul.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#A8CFEE"
+        }
+      ],
       "expo-secure-store"
-    ],
+    ],  
     "experiments": {
       "typedRoutes": true
     }
