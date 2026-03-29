@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -479,11 +480,337 @@ function ListaDeComprasScreen({
   );
 }
 
+// ------- Recetas Screen -------
+const SPOONACULAR_API_KEY = '01d2ea5b6c2c470380e138383cb7659e';
+
+type RecetaMode = 'por_vencer' | 'personalizado';
+
+type SpoonacularRecipe = {
+  id: number;
+  title: string;
+  image: string;
+  usedIngredientCount: number;
+  missedIngredientCount: number;
+  usedIngredients: { name: string }[];
+  missedIngredients: { name: string }[];
+};
+
+async function fetchRecipesFromSpoonacular(ingredientNames: string[]): Promise<SpoonacularRecipe[]> {
+  const ingredients = ingredientNames.join(',');
+  const url = `https://api.spoonacular.com/recipes/findByIngredients?ingredients=${encodeURIComponent(ingredients)}&number=10&ranking=1&ignorePantry=true&apiKey=${SPOONACULAR_API_KEY}`;
+  console.log('[Spoonacular] URL:', url);
+  const res = await fetch(url);
+  const text = await res.text();
+  console.log('[Spoonacular] Status:', res.status, 'Response:', text.slice(0, 300));
+  if (!res.ok) throw new Error(`Spoonacular error: ${res.status} - ${text.slice(0, 100)}`);
+  return JSON.parse(text);
+}
+
+function RecetasScreen({ stockItems }: { stockItems: StockItem[] }) {
+  const [mode, setMode] = useState<RecetaMode | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [newProduct, setNewProduct] = useState('');
+  const [extraProducts, setExtraProducts] = useState<string[]>([]);
+  const [recipes, setRecipes] = useState<SpoonacularRecipe[]>([]);
+  const [recipesLoading, setRecipesLoading] = useState(false);
+  const [recipesError, setRecipesError] = useState<string | null>(null);
+  const [searched, setSearched] = useState(false);
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const displayItems = mode === 'por_vencer'
+    ? stockItems.filter((i) => i.estado === 'por_vencer')
+    : stockItems;
+
+  const addExtraProduct = () => {
+    if (!newProduct.trim()) return;
+    setExtraProducts((prev) => [...prev, newProduct.trim()]);
+    setNewProduct('');
+  };
+
+  const handleSearch = async () => {
+    const selectedNames = stockItems
+      .filter((i) => selected.has(i.id))
+      .map((i) => i.name);
+    const allIngredients = [...selectedNames, ...extraProducts];
+    if (allIngredients.length === 0) return;
+    setRecipesLoading(true);
+    setRecipesError(null);
+    setSearched(true);
+    try {
+      const results: SpoonacularRecipe[] = [
+        {
+          id: 1,
+          title: 'Tarta de manzana clásica',
+          image: 'https://spoonacular.com/recipeImages/715497-312x231.jpg',
+          usedIngredientCount: 2,
+          missedIngredientCount: 1,
+          usedIngredients: [{ name: 'manzana' }, { name: 'azúcar' }],
+          missedIngredients: [{ name: 'masa de tarta' }],
+        },
+        {
+          id: 2,
+          title: 'Compota de manzana con canela',
+          image: 'https://spoonacular.com/recipeImages/716429-312x231.jpg',
+          usedIngredientCount: 2,
+          missedIngredientCount: 1,
+          usedIngredients: [{ name: 'manzana' }, { name: 'canela' }],
+          missedIngredients: [{ name: 'azúcar impalpable' }],
+        },
+        {
+          id: 3,
+          title: 'Ensalada de manzana y nueces',
+          image: 'https://spoonacular.com/recipeImages/716432-312x231.jpg',
+          usedIngredientCount: 2,
+          missedIngredientCount: 2,
+          usedIngredients: [{ name: 'manzana' }, { name: 'lechuga' }],
+          missedIngredients: [{ name: 'nueces' }, { name: 'vinagreta' }],
+        },
+      ];
+      setRecipes(results);
+    } catch {
+      setRecipesError('No se pudieron cargar las recetas. Verificá tu conexión o la API key.');
+    } finally {
+      setRecipesLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    setMode(null);
+    setSelected(new Set());
+    setExtraProducts([]);
+    setRecipes([]);
+    setSearched(false);
+    setRecipesError(null);
+  };
+
+  if (!mode) {
+    return (
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <Text style={styles.sectionTitle}>Buscar recetas</Text>
+        <Text style={recetaStyles.subtitle}>¿Con qué productos querés buscar recetas?</Text>
+        <TouchableOpacity style={recetaStyles.modeCard} onPress={() => setMode('por_vencer')}>
+          <View style={recetaStyles.modeIconWrap}>
+            <Ionicons name="alarm-outline" size={24} color="#E07820" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={recetaStyles.modeTitle}>Productos por vencer</Text>
+            <Text style={recetaStyles.modeDesc}>Elegí entre los productos próximos a vencer</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#CCC" />
+        </TouchableOpacity>
+        <TouchableOpacity style={recetaStyles.modeCard} onPress={() => setMode('personalizado')}>
+          <View style={[recetaStyles.modeIconWrap, { backgroundColor: '#E8F4FF' }]}>
+            <Ionicons name="list-outline" size={24} color="#5B9BD5" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={recetaStyles.modeTitle}>Personalizado</Text>
+            <Text style={recetaStyles.modeDesc}>Seleccioná productos de tu stock y agregá nuevos</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#CCC" />
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <TouchableOpacity onPress={handleBack} style={recetaStyles.backBtn}>
+        <Ionicons name="arrow-back" size={18} color="#5B9BD5" />
+        <Text style={recetaStyles.backText}>Volver</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.sectionTitle}>
+        {mode === 'por_vencer' ? 'Productos por vencer' : 'Personalizado'}
+      </Text>
+
+      {displayItems.length === 0 ? (
+        <Text style={styles.emptyText}>
+          No hay productos {mode === 'por_vencer' ? 'por vencer' : 'en tu stock'}.
+        </Text>
+      ) : (
+        displayItems.map((item) => {
+          const isSelected = selected.has(item.id);
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[recetaStyles.selectCard, isSelected && recetaStyles.selectCardActive]}
+              onPress={() => toggleSelect(item.id)}
+              activeOpacity={0.8}
+            >
+              <Text style={recetaStyles.selectEmoji}>{item.emoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={recetaStyles.selectName}>{item.name}</Text>
+                {!!item.brand && <Text style={recetaStyles.selectBrand}>{item.brand}</Text>}
+              </View>
+              <View style={[recetaStyles.checkbox, isSelected && recetaStyles.checkboxActive]}>
+                {isSelected && <Ionicons name="checkmark" size={14} color="#fff" />}
+              </View>
+            </TouchableOpacity>
+          );
+        })
+      )}
+
+      {mode === 'personalizado' && (
+        <View style={recetaStyles.addNewSection}>
+          <Text style={recetaStyles.addNewTitle}>Agregar nuevo producto</Text>
+          <View style={recetaStyles.addNewRow}>
+            <TextInput
+              style={recetaStyles.addNewInput}
+              placeholder="Ej: harina, tomate..."
+              value={newProduct}
+              onChangeText={setNewProduct}
+              onSubmitEditing={addExtraProduct}
+            />
+            <TouchableOpacity style={recetaStyles.addNewBtn} onPress={addExtraProduct}>
+              <Ionicons name="add" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          {extraProducts.map((p, i) => (
+            <View key={i} style={recetaStyles.extraProductRow}>
+              <Text style={recetaStyles.extraProductText}>🛒 {p}</Text>
+              <TouchableOpacity
+                onPress={() => setExtraProducts((prev) => prev.filter((_, j) => j !== i))}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close-circle" size={18} color="#C0392B" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {(selected.size > 0 || extraProducts.length > 0) && (
+        <TouchableOpacity style={recetaStyles.searchBtn} onPress={handleSearch} disabled={recipesLoading}>
+          {recipesLoading ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="restaurant-outline" size={18} color="#fff" />
+          )}
+          <Text style={recetaStyles.searchBtnText}>
+            {recipesLoading
+              ? 'Buscando...'
+              : `Buscar recetas (${selected.size + extraProducts.length} ingrediente${selected.size + extraProducts.length !== 1 ? 's' : ''})`}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {recipesError && (
+        <Text style={[styles.emptyText, { color: '#C0392B', marginTop: 16 }]}>{recipesError}</Text>
+      )}
+
+      {searched && !recipesLoading && !recipesError && recipes.length === 0 && (
+        <Text style={styles.emptyText}>No se encontraron recetas con esos ingredientes.</Text>
+      )}
+
+      {recipes.length > 0 && (
+        <View style={{ marginTop: 24 }}>
+          <Text style={styles.sectionTitle}>Recetas encontradas</Text>
+          {recipes.map((recipe) => (
+            <View key={recipe.id} style={recetaStyles.recipeCard}>
+              {!!recipe.image && (
+                <Image source={{ uri: recipe.image }} style={recetaStyles.recipeImage} />
+              )}
+              <View style={recetaStyles.recipeInfo}>
+                <Text style={recetaStyles.recipeTitle}>{recipe.title}</Text>
+                <View style={recetaStyles.recipeMeta}>
+                  <View style={recetaStyles.recipeMetaItem}>
+                    <Ionicons name="checkmark-circle-outline" size={14} color="#27AE60" />
+                    <Text style={[recetaStyles.recipeMetaText, { color: '#27AE60' }]}>
+                      {recipe.usedIngredientCount} usados
+                    </Text>
+                  </View>
+                  <View style={recetaStyles.recipeMetaItem}>
+                    <Ionicons name="add-circle-outline" size={14} color="#E07820" />
+                    <Text style={[recetaStyles.recipeMetaText, { color: '#E07820' }]}>
+                      {recipe.missedIngredientCount} faltantes
+                    </Text>
+                  </View>
+                </View>
+                {recipe.missedIngredients.length > 0 && (
+                  <Text style={recetaStyles.recipeMissed} numberOfLines={2}>
+                    Falta: {recipe.missedIngredients.map((i) => i.name).join(', ')}
+                  </Text>
+                )}
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+const recetaStyles = StyleSheet.create({
+  subtitle: { fontSize: 14, color: '#666', marginBottom: 20, marginTop: 4 },
+  modeCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E8E8E8',
+    borderRadius: 16, padding: 16, marginBottom: 14,
+  },
+  modeIconWrap: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#FFF3CD', alignItems: 'center', justifyContent: 'center' },
+  modeTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A', marginBottom: 2 },
+  modeDesc: { fontSize: 13, color: '#888' },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
+  backText: { fontSize: 14, color: '#5B9BD5', fontWeight: '600' },
+  selectCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E8E8E8',
+    borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 10,
+  },
+  selectCardActive: { borderColor: '#A8CFEE', backgroundColor: '#F0F8FF' },
+  selectEmoji: { fontSize: 28 },
+  selectName: { fontSize: 15, fontWeight: '700', color: '#222' },
+  selectBrand: { fontSize: 12, color: '#4ABCB0', marginTop: 2 },
+  checkbox: {
+    width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#CCC',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxActive: { backgroundColor: '#5B9BD5', borderColor: '#5B9BD5' },
+  addNewSection: { marginTop: 20, padding: 16, backgroundColor: '#F8FBFF', borderRadius: 16, borderWidth: 1.5, borderColor: '#D8EAF8' },
+  addNewTitle: { fontSize: 14, fontWeight: '700', color: '#333', marginBottom: 12 },
+  addNewRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+  addNewInput: {
+    flex: 1, height: 42, borderWidth: 1.5, borderColor: '#D0E4F0',
+    borderRadius: 10, paddingHorizontal: 12, fontSize: 14, backgroundColor: '#fff',
+  },
+  addNewBtn: {
+    width: 42, height: 42, borderRadius: 10, backgroundColor: '#5B9BD5',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  extraProductRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#E8F0F8' },
+  extraProductText: { fontSize: 14, color: '#333' },
+  searchBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#5B9BD5', borderRadius: 14, paddingVertical: 14, marginTop: 24,
+  },
+  searchBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  recipeCard: {
+    flexDirection: 'row', gap: 12, backgroundColor: '#fff',
+    borderWidth: 1.5, borderColor: '#E8E8E8', borderRadius: 16,
+    overflow: 'hidden', marginBottom: 14,
+  },
+  recipeImage: { width: 90, height: 90 },
+  recipeInfo: { flex: 1, padding: 12, justifyContent: 'center', gap: 6 },
+  recipeTitle: { fontSize: 14, fontWeight: '700', color: '#1A1A1A', lineHeight: 20 },
+  recipeMeta: { flexDirection: 'row', gap: 12 },
+  recipeMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  recipeMetaText: { fontSize: 12, fontWeight: '600' },
+  recipeMissed: { fontSize: 11, color: '#888', lineHeight: 16 },
+});
+
 // ------- Main Screen -------
 type StockTab = 'stock' | 'lista_compras' | 'recetas';
 
 const STOCK_TABS: { key: StockTab; label: string }[] = [
-  { key: 'stock', label: 'Stock' },
+  { key: 'stock', label: 'Funcionalidades' },
   { key: 'lista_compras', label: 'Lista de compras' },
   { key: 'recetas', label: 'Recetas' },
 ];
@@ -689,13 +1016,7 @@ export default function StockScreen() {
         onAddSuggestion={handleAddSuggestion}
       />
     ) : activeTab === 'recetas' ? (
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.emptyText}>Recetas próximamente.</Text>
-      </ScrollView>
-    ) : (
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.emptyText}>Recetas próximamente.</Text>
-      </ScrollView>
+      <RecetasScreen stockItems={items} />
     ) : (
       <ScrollView
         style={styles.scroll}
