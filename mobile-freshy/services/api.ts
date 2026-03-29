@@ -42,6 +42,7 @@ export type InventoryItem = {
   estado: 'fresco' | 'por_vencer' | 'vencido';
   last_used: string | null;
   entry_date: string | null; // 'YYYY-MM-DD'
+  quantity: number;
 };
 
 export type AddInventoryPayload = {

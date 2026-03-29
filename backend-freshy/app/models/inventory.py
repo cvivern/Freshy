@@ -49,5 +49,6 @@ class InventoryItemResponse(BaseModel):
     estado: str                # fresco | por_vencer | vencido
     last_used: datetime | None  # max(history_logs.created_at) para este item
     entry_date: date | None    # cuando fue agregado al inventario
+    quantity: int = 1
 
     model_config = {"from_attributes": True}

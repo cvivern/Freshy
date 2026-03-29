@@ -200,4 +200,5 @@ class InventoryService:
             estado=row.get("freshness_state") or "fresco",
             last_used=last_used,
             entry_date=row.get("entry_date"),
+            quantity=row.get("quantity") or 1,
         )

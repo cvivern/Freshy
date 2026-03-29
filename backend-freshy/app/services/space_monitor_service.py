@@ -24,7 +24,7 @@ async def fetch_inventory_for_area(storage_area_id: str) -> list[dict]:
         supabase = _get_supabase()
         res = (
             supabase.table("inventory")
-            .select("id, name, brand, quantity, emoji")
+            .select("id, quantity, catalog_items(name, marca, emoji)")
             .eq("storage_area_id", storage_area_id)
             .gt("quantity", 0)
             .execute()
@@ -55,6 +55,9 @@ async def analyze_space_change(
         cantidad_restante: int | None,   ← remaining after this action
       }
     """
+    if not OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY is not set in environment variables")
+
     client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
     # ── Fetch known products from DB ──
@@ -62,8 +65,8 @@ async def analyze_space_change(
 
     if known:
         product_lines = "\n".join(
-            f'  - id={p["id"]} | {p.get("emoji","📦")} {p["name"]}'
-            f'{" — " + p["brand"] if p.get("brand") else ""}'
+            f'  - id={p["id"]} | {(p.get("catalog_items") or {}).get("emoji","📦")} {(p.get("catalog_items") or {}).get("name","?")}'
+            f'{" — " + (p.get("catalog_items") or {}).get("marca") if (p.get("catalog_items") or {}).get("marca") else ""}'
             f' (stock actual: {p.get("quantity", "?")} unidades)'
             for p in known
         )
@@ -99,22 +102,25 @@ Respondé SOLO con JSON válido, sin markdown ni texto extra:
   "descripcion": "descripción breve de lo que cambió"
 }}"""
 
-    response = await client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/jpeg;base64,{frame_before_b64}", "detail": "low"}},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/jpeg;base64,{frame_after_b64}", "detail": "low"}},
-                ],
-            }
-        ],
-        max_tokens=350,
-    )
+    try:
+        response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {
+                            "url": f"data:image/jpeg;base64,{frame_before_b64}", "detail": "low"}},
+                        {"type": "image_url", "image_url": {
+                            "url": f"data:image/jpeg;base64,{frame_after_b64}", "detail": "low"}},
+                    ],
+                }
+            ],
+            max_tokens=350,
+        )
+    except Exception as openai_err:
+        raise RuntimeError(f"OpenAI API error: {type(openai_err).__name__}: {openai_err}") from openai_err
 
     raw = response.choices[0].message.content.strip()
     if raw.startswith("```"):
@@ -130,7 +136,7 @@ Respondé SOLO con JSON válido, sin markdown ni texto extra:
     if item_id:
         matched = next((p for p in known if str(p["id"]) == str(item_id)), None)
         if matched:
-            current_qty = matched.get("quantity", 0)
+            current_qty = matched.get("quantity") or 0
             delta = result.get("cantidad", 1)
             if result["accion"] == "salida":
                 result["cantidad_restante"] = max(0, current_qty - delta)
@@ -232,6 +238,105 @@ async def register_removal(
 
     res = supabase.table("product_removals").insert(data).execute()
     return res.data[0] if res.data else data
+
+
+async def resolve_inventory_item(
+    storage_area_id: str,
+    inventory_item_id: str | None,
+    product_name: str,
+) -> tuple[str | None, str | None]:
+    """
+    Resolves (inventory_item_id, catalog_item_id) for a detected product.
+
+    Priority:
+      1. If inventory_item_id is provided, look it up directly.
+      2. Otherwise search catalog_items by name (case-insensitive).
+      3. If catalog item not found → return (None, None) to discard.
+      4. If catalog item found, look for an existing inventory row in this area.
+         Returns (inventory_row_id or None, catalog_item_id).
+
+    Returns (inventory_item_id, catalog_item_id) or (None, None) to discard.
+    """
+    supabase = _get_supabase()
+
+    if inventory_item_id:
+        res = (
+            supabase.table("inventory")
+            .select("id, catalog_item_id")
+            .eq("id", inventory_item_id)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return res.data[0]["id"], res.data[0]["catalog_item_id"]
+        # id not found — fall through to name search
+        inventory_item_id = None
+
+    # Search catalog by name
+    cat_res = (
+        supabase.table("catalog_items")
+        .select("id")
+        .ilike("name", product_name)
+        .limit(1)
+        .execute()
+    )
+    if not cat_res.data:
+        return None, None  # Not in catalog — discard
+
+    catalog_item_id = cat_res.data[0]["id"]
+
+    # Find the inventory row for this catalog item in this storage area
+    inv_res = (
+        supabase.table("inventory")
+        .select("id")
+        .eq("storage_area_id", storage_area_id)
+        .eq("catalog_item_id", catalog_item_id)
+        .limit(1)
+        .execute()
+    )
+    if inv_res.data:
+        return inv_res.data[0]["id"], catalog_item_id
+
+    # Catalog item exists but no inventory row yet
+    return None, catalog_item_id
+
+
+async def log_history_event(
+    inventory_item_id: str | None,
+    storage_area_id: str,
+    user_id: str,
+    accion: str,
+    cantidad: int,
+    unit: str = "unidad",
+) -> None:
+    """
+    Inserts a row in history_logs to audit the in/out event.
+    Looks up catalog_item_id from inventory when inventory_item_id is provided.
+    """
+    try:
+        supabase = _get_supabase()
+        catalog_item_id = None
+        if inventory_item_id:
+            res = (
+                supabase.table("inventory")
+                .select("catalog_item_id")
+                .eq("id", inventory_item_id)
+                .maybe_single()
+                .execute()
+            )
+            if res and res.data:
+                catalog_item_id = res.data.get("catalog_item_id")
+
+        supabase.table("history_logs").insert({
+            "user_id":         user_id,
+            "catalog_item_id": catalog_item_id,
+            "storage_area_id": storage_area_id,
+            "action":          "ENTRADA" if accion == "entrada" else "SALIDA",
+            "quantity":        cantidad,
+            "unit":            unit,
+        }).execute()
+    except Exception:
+        pass  # Never block the main flow
 
 
 async def mark_as_returned(removal_id: str) -> dict:

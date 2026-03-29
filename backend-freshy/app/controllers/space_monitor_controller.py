@@ -4,10 +4,13 @@ from app.services.space_monitor_service import (
     analyze_space_change,
     broadcast_monitor_event,
     decrement_inventory,
+    resolve_inventory_item,
     increment_inventory,
+    log_history_event,
     register_removal,
     mark_as_returned,
     get_pending_removals,
+    _get_supabase,
 )
 
 router = APIRouter(prefix="/api/v1/monitor", tags=["Space Monitor"])
@@ -81,6 +84,80 @@ async def analyze_frames(req: AnalyzeFramesRequest):
                 )
 
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class MonitorEventRequest(BaseModel):
+    accion: str                    # "entrada" | "salida"
+    inventory_item_id: str | None = None
+    producto_nombre: str
+    producto_emoji: str = "📦"
+    cantidad: int = 1
+    confianza: float = 0.0
+    descripcion: str = ""
+    storage_area_id: str
+    user_id: str
+
+
+@router.post("/event")
+async def register_monitor_event(req: MonitorEventRequest):
+    """
+    Receives a pre-processed detection result from the local monitor tool.
+    - Updates inventory (increment / decrement)
+    - Writes an audit row to history_logs
+    - Broadcasts via Supabase Realtime so the mobile app gets the toast
+    """
+    try:
+        # Resolve against DB — discard if catalog item doesn't exist
+        item_id, catalog_item_id = await resolve_inventory_item(
+            storage_area_id=req.storage_area_id,
+            inventory_item_id=req.inventory_item_id,
+            product_name=req.producto_nombre,
+        )
+        if not catalog_item_id:
+            return {"ok": False, "discarded": True, "reason": "product not found in catalog"}
+
+        cantidad_restante = None
+
+        if req.accion == "salida":
+            if item_id:
+                cantidad_restante = await decrement_inventory(item_id, req.cantidad)
+            await register_removal(
+                storage_area_id=req.storage_area_id,
+                product_name=req.producto_nombre,
+                product_emoji=req.producto_emoji,
+                cantidad=req.cantidad,
+                user_id=req.user_id,
+            )
+        elif req.accion == "entrada":
+            if item_id:
+                cantidad_restante = await increment_inventory(item_id, req.cantidad)
+
+        # Log to history_logs using the resolved catalog_item_id directly
+        _get_supabase().table("history_logs").insert({
+            "user_id":         req.user_id,
+            "catalog_item_id": catalog_item_id,
+            "storage_area_id": req.storage_area_id,
+            "action":          "ENTRADA" if req.accion == "entrada" else "SALIDA",
+            "quantity":        req.cantidad,
+            "unit":            "unidad",
+        }).execute()
+
+        await broadcast_monitor_event(
+            user_id=req.user_id,
+            storage_area_id=req.storage_area_id,
+            accion=req.accion,
+            producto_nombre=req.producto_nombre,
+            producto_emoji=req.producto_emoji,
+            cantidad=req.cantidad,
+            cantidad_restante=cantidad_restante,
+            inventory_item_id=item_id,
+            confianza=req.confianza,
+            descripcion=req.descripcion,
+        )
+
+        return {"ok": True, "cantidad_restante": cantidad_restante, "inventory_item_id": item_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -45,6 +45,7 @@ type StockItem = {
   daysLeft: number;
   shelfLife: number;
   estado: 'fresco' | 'por_vencer' | 'vencido';
+  quantity: number;
 };
 
 // ------- Helpers -------
@@ -80,6 +81,7 @@ function mapToStockItem(item: InventoryItemResponse): StockItem {
     daysLeft,
     shelfLife: shelfLifeFromEstado(estado),
     estado,
+    quantity: item.quantity ?? 1,
   };
 }
 
@@ -163,7 +165,12 @@ function ProductCard({ item, cartState, onAddToCart, token, onDeleted, onUpdated
           />
         </View>
       </View>
-      <Text style={styles.productName}>{item.name}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text style={styles.productName}>{item.name}</Text>
+        <View style={styles.quantityBadge}>
+          <Text style={styles.quantityText}>x{item.quantity}</Text>
+        </View>
+      </View>
       {!!item.brand && <Text style={styles.productBrand}>{item.brand}</Text>}
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${progress * 100}%` as any, backgroundColor: status.borderColor }]} />
@@ -1140,6 +1147,8 @@ const styles = StyleSheet.create({
   spaceChipText: { fontSize: 12, color: '#555', fontWeight: '600' },
   productName: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 2 },
   productBrand: { fontSize: 13, color: '#4ABCB0', marginBottom: 10, fontWeight: '500' },
+  quantityBadge: { backgroundColor: '#E8F4FF', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 },
+  quantityText: { fontSize: 13, fontWeight: '700', color: '#5B9BD5' },
   progressTrack: { height: 8, backgroundColor: '#E0E0E0', borderRadius: 4, marginBottom: 12, overflow: 'hidden' },
   progressFill: { height: 8, backgroundColor: '#4ABCB0', borderRadius: 4 },
   productFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
