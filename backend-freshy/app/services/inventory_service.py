@@ -119,6 +119,45 @@ class InventoryService:
 
         return results
 
+    def quick_update_from_scan(
+        self,
+        storage_area_id: UUID,
+        detected_name: str,
+        action: str,  # 'in' | 'out'
+    ) -> dict:
+        """
+        Find an inventory item matching `detected_name` in the given storage area
+        and increment (action='in') or decrement (action='out') its quantity by 1.
+        Returns a dict with match info and updated quantities.
+        """
+        rows = self._repo.find_by_product_name_in_area(storage_area_id, detected_name)
+        if not rows:
+            return {"matched": False, "detected_name": detected_name}
+
+        row = rows[0]  # FIFO: earliest expiry
+        catalog = row.get("catalog_items") or {}
+        current_qty = row.get("quantity") or 1
+
+        if action == "out":
+            new_qty = max(0, current_qty - 1)
+            if new_qty == 0:
+                self._repo.delete_item(row["id"])
+            else:
+                self._repo.update_quantity(row["id"], new_qty)
+        else:  # 'in'
+            new_qty = current_qty + 1
+            self._repo.update_quantity(row["id"], new_qty)
+
+        return {
+            "matched": True,
+            "item_id": str(row["id"]),
+            "name": catalog.get("name", detected_name),
+            "emoji": catalog.get("emoji") or "📦",
+            "quantity_before": current_qty,
+            "quantity_after": new_qty,
+            "action": action,
+        }
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

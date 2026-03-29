@@ -334,6 +334,32 @@ export function formatItemName(cls: string): string {
   return map[cls.toLowerCase()] ?? cls.replace(/_/g, ' ');
 }
 
+export type QuickUpdateResult =
+  | { matched: true; item_id: string; name: string; emoji: string; quantity_before: number; quantity_after: number; action: 'in' | 'out' }
+  | { matched: false; detected_name: string };
+
+export async function quickScanUpdate(
+  uri: string,
+  storageAreaId: string,
+  action: 'in' | 'out',
+  token?: string | null,
+): Promise<QuickUpdateResult> {
+  const formData = new FormData();
+  formData.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
+  formData.append('storage_area_id', storageAreaId);
+  formData.append('action', action);
+  const response = await fetchWithTimeout(
+    `${API_BASE}/api/v1/detection/quick-update`,
+    { method: 'POST', body: formData, headers: authHeaders(token) },
+    30000,
+  );
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Error del servidor (${response.status}): ${text}`);
+  }
+  return response.json();
+}
+
 export async function addToInventory(payload: AddInventoryPayload, token?: string | null): Promise<void> {
   const response = await fetchWithTimeout(
     `${API_BASE}/api/v1/inventory/`,

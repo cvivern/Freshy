@@ -1,5 +1,11 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, status
+from uuid import UUID
 
+from fastapi import APIRouter, Form, HTTPException, UploadFile, File, status
+
+from app.core.supabase import get_supabase_client
+from app.repositories.catalog_item_repository import CatalogItemRepository
+from app.repositories.inventory_repository import InventoryRepository
+from app.services.inventory_service import InventoryService
 from app.services.openai_detection_service import OpenAIDetectionService
 
 router = APIRouter(prefix="/detection", tags=["Detection"])
@@ -14,7 +20,7 @@ async def _get_image_bytes(image_file: UploadFile) -> bytes:
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail=f"Tipo de archivo no soportado: '{image_file.content_type}'. Usá JPEG, PNG o WEBP.",
         )
-    
+
 @router.post(
     "/identify",
     summary="Detect fruits and vegetables in an image",
@@ -151,3 +157,73 @@ async def scan_packaged_product(file: UploadFile = File(...)):
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"OpenAI analysis failed: {exc}",
         )
+
+
+@router.post(
+    "/quick-update",
+    summary="Detect a product and update its inventory quantity (+1 or -1)",
+    status_code=status.HTTP_200_OK,
+)
+async def quick_update(
+    file: UploadFile = File(...),
+    storage_area_id: str = Form(...),
+    action: str = Form(...),  # 'in' | 'out'
+):
+    """
+    Upload a photo of a product already in inventory.
+    The AI identifies it and automatically increments (action='in')
+    or decrements (action='out') the matching inventory row's quantity.
+
+    Returns:
+    - matched=True  → {matched, item_id, name, emoji, quantity_before, quantity_after, action}
+    - matched=False → {matched, detected_name}  (no item found in inventory)
+    - matched=False → {matched, detected_name='unknown'}  (AI couldn't identify product)
+    """
+    if action not in ("in", "out"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="action must be 'in' or 'out'",
+        )
+
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported file type '{file.content_type}'. Use JPEG, PNG or WEBP.",
+        )
+
+    image_bytes = await file.read()
+    if len(image_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Image exceeds 10 MB limit.",
+        )
+
+    # 1. Detect product name via OpenAI
+    detection_service = OpenAIDetectionService()
+    try:
+        result = detection_service.analyze(image_bytes)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"OpenAI analysis failed: {exc}",
+        )
+
+    detected_name = result.get("name") or result.get("brand")
+    if not detected_name or result.get("type") == "unknown":
+        return {"matched": False, "detected_name": "unknown"}
+
+    # 2. Find match in inventory and update quantity
+    client = get_supabase_client()
+    inv_service = InventoryService(
+        repo=InventoryRepository(client),
+        catalog_repo=CatalogItemRepository(client),
+    )
+    try:
+        area_uuid = UUID(storage_area_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid storage_area_id UUID",
+        )
+
+    return inv_service.quick_update_from_scan(area_uuid, detected_name, action)

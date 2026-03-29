@@ -50,6 +50,45 @@ class InventoryRepository:
         )
         return [row["id"] for row in (response.data or [])]
 
+    def find_by_product_name_in_area(self, storage_area_id: UUID, name: str) -> list[dict]:
+        """Find inventory rows in a storage area where catalog item name matches (fuzzy)."""
+        response = (
+            self._db.table(INVENTORY_TABLE)
+            .select("id, quantity, expiry_date, catalog_item_id, catalog_items(id, name, emoji)")
+            .eq("storage_area_id", str(storage_area_id))
+            .execute()
+        )
+        name_lower = name.lower().strip()
+        results = []
+        for row in (response.data or []):
+            item_name = (row.get("catalog_items") or {}).get("name", "").lower().strip()
+            if not item_name:
+                continue
+            # Accept if either is a substring of the other
+            if name_lower in item_name or item_name in name_lower:
+                results.append(row)
+        # FIFO: earliest expiry first
+        results.sort(key=lambda r: r.get("expiry_date") or "9999-99-99")
+        return results
+
+    def update_quantity(self, inventory_id: str, new_quantity: int) -> dict:
+        response = (
+            self._db.table(INVENTORY_TABLE)
+            .update({"quantity": new_quantity})
+            .eq("id", inventory_id)
+            .execute()
+        )
+        return response.data[0] if response.data else {}
+
+    def delete_item(self, inventory_id: str) -> bool:
+        response = (
+            self._db.table(INVENTORY_TABLE)
+            .delete()
+            .eq("id", inventory_id)
+            .execute()
+        )
+        return len(response.data) > 0
+
     def get_storage_area_owner(self, storage_area_id: UUID | None) -> str | None:
         """Returns the owner_id (profile_id) that owns the storage_area, or None.
 
