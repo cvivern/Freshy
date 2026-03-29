@@ -158,6 +158,19 @@ class InventoryService:
             "action": action,
         }
 
+    def delete_inventory_item(self, inventory_id: str) -> bool:
+        return self._repo.delete_by_id(inventory_id)
+
+    def update_inventory_item(self, inventory_id: str, product_name: str | None, expiry_date) -> dict:
+        row = self._repo.get_by_id(inventory_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Inventory item not found")
+        if product_name and self._catalog_repo:
+            self._catalog_repo.update_name(row["catalog_item_id"], product_name)
+        if expiry_date is not None:
+            self._repo.update_expiry(inventory_id, expiry_date.isoformat())
+        return {"id": inventory_id, "updated": True}
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
