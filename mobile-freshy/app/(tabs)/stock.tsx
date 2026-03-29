@@ -529,6 +529,7 @@ export default function StockScreen() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
   const [storageAreaId, setStorageAreaId] = useState('');
 
+  const [mode, setMode] = useState<ScreenMode>('stock');
   const [cartStates, setCartStates] = useState<Record<string, CartButtonState>>({});
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
 
