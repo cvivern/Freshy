@@ -191,10 +191,15 @@ export function useSpaceMonitor({
   }, [enabled, permission?.granted, captureAndProcess]);
 
   useEffect(() => {
-    if (permission && !permission.granted && permission.canAskAgain) {
-      requestPermission();
+    if (!permission) return;
+    if (!permission.granted) {
+      if (permission.canAskAgain) {
+        requestPermission();
+      } else {
+        console.warn('[SpaceMonitor] Permiso de cámara denegado permanentemente. El monitor no puede activarse.');
+      }
     }
-  }, [permission]);
+  }, [permission?.granted]);
 
   // ── Supabase Realtime: escucha eventos del PC u otros dispositivos ──
   useEffect(() => {
@@ -249,12 +254,16 @@ export function useSpaceMonitor({
   const MonitorCamera = useCallback(() => {
     if (!enabled) return null;
 
+    const noPerm = !permission?.granted;
+
     const dotColor =
+      noPerm                        ? '#FF8800' :
       monitorStatus === 'analyzing' ? '#FFA500' :
       monitorStatus === 'motion'    ? '#FF4444' :
       monitorStatus === 'watching'  ? '#44CC44' : '#888';
 
     const dotLabel =
+      noPerm                        ? 'Sin permiso de cámara' :
       monitorStatus === 'analyzing' ? 'IA analizando...' :
       monitorStatus === 'motion'    ? 'Movimiento detectado' :
       monitorStatus === 'watching'  ? 'Monitor activo' : '';
@@ -275,7 +284,7 @@ export function useSpaceMonitor({
           )
         : null,
       // Indicador visible
-      monitorStatus !== 'idle'
+      (monitorStatus !== 'idle' || noPerm)
         ? React.createElement(
             View,
             { style: monStyles.indicator },

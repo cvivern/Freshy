@@ -414,14 +414,16 @@ export default function ProfileScreen() {
       const existingCams = await fetchCameras(user.user_id);
       if (existingCams.length === 0 && allAreas.length > 0) {
         try {
-          const defaultCam = await createCamera({
+          await createCamera({
             name: 'Cámara del dispositivo',
             storage_area_id: allAreas[0].id,
             user_id: user.user_id,
             device_identifier: 'device',
             is_active: true,
           });
-          setCameras([defaultCam]);
+          // Re-fetch para tener el join completo
+          const withJoin = await fetchCameras(user.user_id);
+          setCameras(withJoin);
         } catch {
           setCameras([]);
         }
@@ -456,22 +458,22 @@ export default function ProfileScreen() {
 
   async function handleAddCamera(name: string, storageAreaId: string) {
     if (!user) return;
-    const cam = await createCamera({
+    await createCamera({
       name,
       storage_area_id: storageAreaId,
       user_id: user.user_id,
-      is_active: cameras.length === 0, // first camera is active by default
+      is_active: cameras.length === 0,
     });
-    setCameras(prev => [...prev, cam]);
+    // Re-fetch para obtener el join completo con storage_areas + households
+    const updated = await fetchCameras(user.user_id);
+    setCameras(updated);
   }
 
   async function handleEditCamera(cameraId: string, name: string, storageAreaId: string, isActive: boolean) {
-    const updated = await updateCamera(cameraId, { name, storage_area_id: storageAreaId, is_active: isActive });
-    setCameras(prev => prev.map(c => {
-      if (isActive && c.id !== cameraId) return { ...c, is_active: false };
-      if (c.id === cameraId) return { ...c, ...updated };
-      return c;
-    }));
+    await updateCamera(cameraId, { name, storage_area_id: storageAreaId, is_active: isActive });
+    // Re-fetch para tener datos actualizados con joins
+    const updated = await fetchCameras(user.user_id);
+    setCameras(updated);
   }
 
   async function handleDeleteCamera(cameraId: string) {
