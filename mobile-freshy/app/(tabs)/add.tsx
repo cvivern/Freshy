@@ -426,6 +426,7 @@ export default function AddScreen() {
         product_category: 'Frutas y verduras',
         quantity: 1,
         expiry_date: toISODate(fruitExpiry),
+        emoji: det.emoji,
       });
       const next = detectionIndex + 1;
       if (next < detections.length) {
@@ -542,7 +543,7 @@ export default function AddScreen() {
                 <Text style={styles.cardTitle}>¿Qué detectamos?</Text>
               </View>
               <View style={[styles.detectedBox, { alignItems: 'center', paddingVertical: 20 }]}>
-                <Text style={{ fontSize: 48 }}>🍓</Text>
+                <Text style={{ fontSize: 48 }}>{det?.emoji ?? '🍓'}</Text>
                 <Text style={[styles.detectedValue, { fontSize: 22, marginTop: 8 }]}>{fruitName}</Text>
                 <Text style={[styles.aiHint, { marginTop: 4 }]}>{confidencePct}% de confianza</Text>
               </View>

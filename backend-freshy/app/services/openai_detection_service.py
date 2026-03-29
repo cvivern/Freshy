@@ -7,15 +7,23 @@ import httpx
 from app.core.config import settings
 
 _PROMPT = (
-    "Analyze this image and identify what you see. "
-    "Reply ONLY with a valid JSON object - no markdown, no extra text.\n\n"
-    "If you see a FRUIT or VEGETABLE return:\n"
-    '{"type": "fruit", "name": "<name in Spanish e.g. Manzana Banana Tomate>", '
-    '"freshness": "fresco" if fresh and good, "medio" if slightly bad, "malo" if rotten}\n\n'
-    "If you see a PACKAGED PRODUCT return:\n"
-    '{"type": "barcode_product", "name": "<product name>", "brand": "<brand or null>", '
-    '"expiry_date": "<YYYY-MM-DD if visible or null>"}\n\n'
-    'If nothing food-related: {"type": "unknown"}'
+    "Analyze this image with high precision. "
+    "Reply ONLY with a valid JSON object - no markdown, no extra text, no explanations.\n\n"
+    
+    "STRICT RULE FOR PACKAGED PRODUCTS:\n"
+    "For every attribute (name, brand, expiry_date), you must be at least 95% certain based "
+    "EXPLICITLY on the visual evidence in the image. If you are not 95% sure or the text is "
+    "blurry/missing, you MUST return null for that specific field. Do not hallucinate or infer.\n\n"
+    
+    "CASE 1: FRUIT or VEGETABLE\n"
+    '{"type": "fruit", "name": "<name in Spanish>", "freshness": "<fresco|medio|malo>", "emoji": "<single emoji that represents this item>"}\n\n'
+    
+    "CASE 2: PACKAGED PRODUCT\n"
+    '{"type": "barcode_product", "name": "<product name or null>", "brand": "<brand or null>", '
+    '"expiry_date": "<YYYY-MM-DD or null>"}\n\n'
+    
+    "CASE 3: NOTHING FOOD-RELATED\n"
+    '{"type": "unknown"}'
 )
 
 
