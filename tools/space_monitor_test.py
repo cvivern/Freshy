@@ -32,8 +32,8 @@ import numpy as np
 from datetime import datetime
 
 # ── Configuración ──────────────────────────────────────────────────────────────
-# URL del backend
-BACKEND_URL = "https://backend-freshy.vercel.app"
+# URL del backend — local tiene prioridad (más rápido y tiene las env vars)
+BACKEND_URL = "http://localhost:8000"
 
 # Usuario activo (el mismo que está logueado en la app)
 # Para ver tu user_id: abrí la app → Perfil → el ID aparece debajo del nombre

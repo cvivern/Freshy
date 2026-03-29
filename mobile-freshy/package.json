@@ -8,7 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "premonitor": "powershell -Command \"$p=(Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue).OwningProcess; if($p){Stop-Process -Id $p -Force -ErrorAction SilentlyContinue}; Write-Host 'Puerto 8081 liberado'\"",
-    "monitor": "start \"Freshy - Expo\" cmd /k \"expo start\" && set PYTHONIOENCODING=utf-8 && pip install opencv-python openai numpy -q && python ../tools/space_monitor_test.py"
+    "monitor": "start \"Freshy - Expo\" cmd /k \"expo start\" && start \"Freshy - Backend\" cmd /k \"cd ../backend-freshy && pip install -r requirements.txt -q && uvicorn app.main:app --reload --port 8000\" && timeout /t 4 /nobreak >nul && set PYTHONIOENCODING=utf-8 && pip install opencv-python openai numpy -q && python ../tools/space_monitor_test.py"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
