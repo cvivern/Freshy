@@ -178,7 +178,7 @@ function Dropdown({ options, selected, onSelect }: DropdownProps) {
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const { user } = useAuth();
-  const { shoppingList, addToList } = useShoppingList();
+  const { shoppingList, addToList, removeFromList } = useShoppingList();
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterState>('todos');
   const [activeSort, setActiveSort] = useState<SortOption>('vence_primero');
@@ -190,7 +190,6 @@ export default function HomeScreen() {
   const [hogares, setHogares] = useState<HogarOption[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
   const [selectedStorageAreaId, setSelectedStorageAreaId] = useState('');
-  const [cartStates, setCartStates] = useState<Record<string, CartButtonState>>({});
 
   useSpaceMonitor({
     userId: user?.user_id ?? DEFAULT_USER_ID,
@@ -289,13 +288,11 @@ export default function HomeScreen() {
 
   const handleAddToCart = useCallback((item: InventoryItem) => {
     if (shoppingList.some((s) => s.id === item.id)) {
-      setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
-      return;
+      removeFromList(item.id);
+    } else {
+      addToList({ id: item.id, emoji: item.emoji ?? '📦', name: item.nombre, brand: item.marca ?? '' });
     }
-    setCartStates((prev) => ({ ...prev, [item.id]: 'loading' }));
-    addToList({ id: item.id, emoji: item.emoji ?? '📦', name: item.nombre, brand: item.marca ?? '' });
-    setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
-  }, [shoppingList, addToList]);
+  }, [shoppingList, addToList, removeFromList]);
 
   return (
     <View style={styles.container}>
@@ -404,7 +401,7 @@ export default function HomeScreen() {
                         <Text style={styles.spaceChipText}>{item.categoria}</Text>
                       </View>
                     )}
-                    <CartButton state={cartStates[item.id] ?? 'idle'} onPress={() => handleAddToCart(item)} />
+                    <CartButton state={shoppingList.some(s => s.id === item.id) ? 'added' : 'idle'} onPress={() => handleAddToCart(item)} />
                     <ProductActionsMenu
                       item={item}
                       token={user?.access_token}
