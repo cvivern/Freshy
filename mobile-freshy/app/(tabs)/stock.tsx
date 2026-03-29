@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -490,20 +491,30 @@ export default function StockScreen() {
 
   const [cartStates, setCartStates] = useState<Record<string, CartButtonState>>({});
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  async function loadInventory(areaId: string) {
-    setLoading(true);
+  async function loadInventory(areaId: string, isRefresh = false) {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
     setError(null);
     try {
       const data = await fetchInventory(user?.user_id ?? '', areaId, user?.access_token);
-      setItems(data.map(mapToStockItem));
-      setCartStates({});
+      const sorted = [...data].sort((a, b) => {
+        const da = a.entry_date ?? '';
+        const db = b.entry_date ?? '';
+        return db.localeCompare(da); // más nuevo primero
+      });
+      setItems(sorted.map(mapToStockItem));
+      if (!isRefresh) setCartStates({});
     } catch (e: any) {
       setError(e.message ?? 'Error al cargar el inventario');
     } finally {
-      setLoading(false);
+      if (isRefresh) setRefreshing(false); else setLoading(false);
     }
   }
+
+  const handleRefresh = useCallback(() => {
+    if (storageAreaId) loadInventory(storageAreaId, true);
+  }, [storageAreaId]);
 
   const handleAddToCart = useCallback(async (item: StockItem) => {
     if (shoppingList.some((s) => s.id === item.id)) {
@@ -646,7 +657,13 @@ export default function StockScreen() {
         onAddSuggestion={handleAddSuggestion}
       />
     ) : (
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#A8CFEE']} tintColor="#A8CFEE" />
+        }
+      >
         <Text style={styles.sectionTitle}>Resumen del hogar</Text>
 
         <View style={styles.statsGrid}>

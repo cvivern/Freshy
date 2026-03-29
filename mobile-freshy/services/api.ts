@@ -41,6 +41,7 @@ export type InventoryItem = {
   fecha_vencimiento: string | null; // 'YYYY-MM-DD'
   estado: 'fresco' | 'por_vencer' | 'vencido';
   last_used: string | null;
+  entry_date: string | null; // 'YYYY-MM-DD'
 };
 
 export type AddInventoryPayload = {

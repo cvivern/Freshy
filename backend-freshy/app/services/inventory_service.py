@@ -147,4 +147,5 @@ class InventoryService:
             fecha_vencimiento=row.get("expiry_date"),
             estado=row.get("freshness_state") or "fresco",
             last_used=last_used,
+            entry_date=row.get("entry_date"),
         )
