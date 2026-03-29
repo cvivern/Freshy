@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -18,6 +22,8 @@ import {
   fetchHouseholds,
   fetchStorageAreas,
   calcEstado,
+  deleteInventoryItem,
+  updateInventoryItem,
 } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import type { InventoryItemResponse } from '@/services/api';
@@ -504,6 +510,13 @@ export default function StockScreen() {
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Three-dot menu state
+  const [menuItem, setMenuItem] = useState<StockItem | null>(null);
+  const [editItem, setEditItem] = useState<StockItem | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editExpiry, setEditExpiry] = useState('');
+  const [saving, setSaving] = useState(false);
+
   async function loadInventory(areaId: string, isRefresh = false) {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     setError(null);
@@ -526,6 +539,76 @@ export default function StockScreen() {
   const handleRefresh = useCallback(() => {
     if (storageAreaId) loadInventory(storageAreaId, true);
   }, [storageAreaId]);
+
+  const handleDelete = useCallback((item: StockItem) => {
+    setMenuItem(null);
+    Alert.alert(
+      'Eliminar producto',
+      `¿Eliminás "${item.name}" del inventario?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar', style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteInventoryItem(item.id, user?.access_token);
+              setItems((prev) => prev.filter((i) => i.id !== item.id));
+            } catch {
+              Alert.alert('Error', 'No se pudo eliminar el producto.');
+            }
+          },
+        },
+      ],
+    );
+  }, [user?.access_token]);
+
+  const openEdit = useCallback((item: StockItem) => {
+    setMenuItem(null);
+    setEditItem(item);
+    setEditName(item.name);
+    // Convert DD/MM/YYYY → DD/MM/YYYY (already formatted) for display
+    setEditExpiry(item.expiryDate === 'Sin fecha' ? '' : item.expiryDate);
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editItem) return;
+    setSaving(true);
+    try {
+      // Convert DD/MM/YYYY → YYYY-MM-DD for the API
+      let isoExpiry: string | undefined;
+      if (editExpiry.trim()) {
+        const parts = editExpiry.trim().split('/');
+        if (parts.length === 3) {
+          const [d, m, y] = parts;
+          isoExpiry = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+      }
+      await updateInventoryItem(
+        editItem.id,
+        { product_name: editName.trim() || undefined, expiry_date: isoExpiry },
+        user?.access_token,
+      );
+      setItems((prev) => prev.map((i) => {
+        if (i.id !== editItem.id) return i;
+        const newExpiry = isoExpiry ? isoExpiry : i.expiryDate;
+        const daysLeft = isoExpiry ? calcDaysLeft(isoExpiry) : i.daysLeft;
+        return {
+          ...i,
+          name: editName.trim() || i.name,
+          expiryDate: isoExpiry
+            ? (() => { const [y2, m2, d2] = isoExpiry.split('-'); return `${d2}/${m2}/${y2}`; })()
+            : i.expiryDate,
+          daysLeft,
+          estado: calcEstado(isoExpiry ?? (i.expiryDate !== 'Sin fecha' ? i.expiryDate : null)) as StockItem['estado'],
+        };
+      }));
+      setEditItem(null);
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar los cambios.');
+    } finally {
+      setSaving(false);
+    }
+  }, [editItem, editName, editExpiry, user?.access_token]);
 
   const handleAddToCart = useCallback(async (item: StockItem) => {
     if (shoppingList.some((s) => s.id === item.id)) {
@@ -755,6 +838,7 @@ export default function StockScreen() {
 
       </ScrollView>
     )}
+
     </View>
   );
 }
@@ -838,4 +922,42 @@ const styles = StyleSheet.create({
   placeholderContainer: { alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 40 },
   placeholderTitle: { fontSize: 20, fontWeight: '700', color: '#1A1A1A' },
   placeholderText: { fontSize: 14, color: '#888', textAlign: 'center' },
+
+  // Three-dot button on card
+  menuDots: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16 },
+
+  // Action menu modal
+  menuOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  menuSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32, gap: 4,
+  },
+  menuTitle: { fontSize: 14, fontWeight: '700', color: '#888', marginBottom: 8, paddingHorizontal: 4 },
+  menuOption: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 4 },
+  menuOptionText: { fontSize: 16, fontWeight: '600', color: '#222' },
+  menuDivider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 2 },
+
+  // Edit modal
+  editSheet: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 32, gap: 8,
+  },
+  editTitle: { fontSize: 18, fontWeight: '800', color: '#1A1A1A', marginBottom: 8 },
+  editLabel: { fontSize: 12, fontWeight: '700', color: '#9AACBC', textTransform: 'uppercase', letterSpacing: 0.5 },
+  editInput: {
+    backgroundColor: '#F5F9FF', borderWidth: 1.5, borderColor: '#D0E8F8',
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, color: '#1A1A1A', marginBottom: 8,
+  },
+  editButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  editCancel: {
+    flex: 1, alignItems: 'center', paddingVertical: 14,
+    borderRadius: 14, backgroundColor: '#F0F0F0',
+  },
+  editCancelText: { fontSize: 15, fontWeight: '700', color: '#666' },
+  editSave: {
+    flex: 1, alignItems: 'center', paddingVertical: 14,
+    borderRadius: 14, backgroundColor: '#A8CFEE',
+  },
+  editSaveText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });

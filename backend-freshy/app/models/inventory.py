@@ -4,6 +4,11 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class InventoryPatch(BaseModel):
+    product_name: str | None = None
+    expiry_date: date | None = None
+
+
 class DetectedItemInput(BaseModel):
     name: str
     quantity: int = 1

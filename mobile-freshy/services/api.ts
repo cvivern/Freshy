@@ -360,6 +360,7 @@ export async function quickScanUpdate(
   }
   return response.json();
 }
+}
 
 export async function addToInventory(payload: AddInventoryPayload, token?: string | null): Promise<void> {
   const response = await fetchWithTimeout(
