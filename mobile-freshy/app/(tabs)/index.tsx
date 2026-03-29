@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -181,6 +182,7 @@ export default function HomeScreen() {
   const [activeSort, setActiveSort] = useState<SortOption>('vence_primero');
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [hogares, setHogares] = useState<HogarOption[]>([]);
@@ -222,18 +224,33 @@ export default function HomeScreen() {
     });
   }, [selectedHouseholdId]);
 
+  const loadItems = useCallback(async (areaId: string, isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchInventoryItems(user?.user_id ?? '', areaId, user?.access_token);
+      const sorted = [...data].sort((a, b) => {
+        const da = a.entry_date ?? '';
+        const db = b.entry_date ?? '';
+        return db.localeCompare(da); // más nuevo primero
+      });
+      setItems(sorted);
+      scheduleExpiryNotifications(sorted).catch(() => {});
+    } catch (e: any) {
+      setError(e.message ?? 'Error al cargar');
+    } finally {
+      if (isRefresh) setRefreshing(false); else setLoading(false);
+    }
+  }, [user?.user_id, user?.access_token]);
+
+  const handleRefresh = useCallback(() => {
+    if (selectedStorageAreaId) loadItems(selectedStorageAreaId, true);
+  }, [selectedStorageAreaId, loadItems]);
+
   // Al cambiar storage area, cargar inventario
   useEffect(() => {
     if (!selectedStorageAreaId) return;
-    setLoading(true);
-    setError(null);
-    fetchInventoryItems(user?.user_id ?? '', selectedStorageAreaId, user?.access_token)
-      .then((data) => {
-        setItems(data);
-        scheduleExpiryNotifications(data).catch(() => {});
-      })
-      .catch((e) => setError(e.message ?? 'Error al cargar'))
-      .finally(() => setLoading(false));
+    loadItems(selectedStorageAreaId);
   }, [selectedStorageAreaId]);
 
   const filteredItems = items
@@ -284,7 +301,13 @@ export default function HomeScreen() {
         onSelect={setSelectedHouseholdId}
       />
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#A8CFEE']} tintColor="#A8CFEE" />
+        }
+      >
 
         <Text style={styles.greeting}>Hola!</Text>
 

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -221,6 +222,7 @@ export default function StatsScreen() {
   const { user } = useAuth();
   const [data, setData] = useState<StatsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [storageAreas, setStorageAreas] = useState<StorageArea[]>([]);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
@@ -228,8 +230,8 @@ export default function StatsScreen() {
   const [hogares, setHogares] = useState<HogarOption[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
 
-  async function loadStats(areas: StorageArea[], areaId: string | null) {
-    setLoading(true);
+  async function loadStats(areas: StorageArea[], areaId: string | null, isRefresh = false) {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
     setError(null);
     try {
       let items: InventoryItem[];
@@ -247,9 +249,13 @@ export default function StatsScreen() {
     } catch (e: any) {
       setError(e.message ?? 'Error al cargar estadísticas');
     } finally {
-      setLoading(false);
+      if (isRefresh) setRefreshing(false); else setLoading(false);
     }
   }
+
+  const handleRefresh = useCallback(() => {
+    loadStats(areasRef.current, selectedAreaId, true);
+  }, [selectedAreaId]);
 
   async function loadAreas(householdId?: string) {
     try {
@@ -384,7 +390,13 @@ export default function StatsScreen() {
         ))}
       </ScrollView>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={['#A8CFEE']} tintColor="#A8CFEE" />
+        }
+      >
         <Text style={styles.pageTitle}>Análisis de productos</Text>
         <Text style={styles.pageSubtitle}>En diferentes espacios dentro de un hogar y en todos</Text>
 
