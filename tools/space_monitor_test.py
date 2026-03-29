@@ -30,11 +30,16 @@ import threading
 import collections
 import numpy as np
 from datetime import datetime
+from openai import OpenAI
+
+
+OPENAI_API_KEY = "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"
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ── Configuración ──────────────────────────────────────────────────────────────
 # URL del backend — local tiene prioridad (más rápido y tiene las env vars)
-BACKEND_URL = "http://localhost:8000"
-
+BACKEND_URL = "https://backend-freshy.vercel.app"
 # Usuario activo (el mismo que está logueado en la app)
 # Para ver tu user_id: abrí la app → Perfil → el ID aparece debajo del nombre
 # Usuarios conocidos:
@@ -94,38 +99,112 @@ def frame_to_b64(frame: np.ndarray, quality: int = 60) -> str:
     return base64.b64encode(buf).decode("utf-8")
 
 
-def send_to_backend(before_b64: str, after_b64: str,
-                    storage_area_id: str, user_id: str) -> dict:
-    """
-    Manda los dos frames al backend. El backend:
-      1. Consulta el inventario real de la DB
-      2. Llama a GPT-4o con ese contexto (matchea productos exactos)
-      3. Incrementa/decrementa cantidad SOLO si el producto existe en DB
-      4. Inserta en monitor_events → Supabase Realtime → toast en el celular
-    """
+def fetch_inventory(user_id: str, storage_area_id: str) -> list[dict]:
+    """Obtiene el inventario actual del área desde Supabase."""
     import urllib.request, urllib.error
-    url  = f"{BACKEND_URL}/api/v1/monitor/analyze"
-    body = json.dumps({
-        "frame_before_b64": before_b64,
-        "frame_after_b64":  after_b64,
-        "storage_area_id":  storage_area_id,
-        "user_id":          user_id,
-        "auto_register":    True,
-    }).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST", headers={
-        "Content-Type": "application/json",
-        "Accept":        "application/json",
-    })
+    url = f"{BACKEND_URL}/api/v1/inventory/?storage_area_id={storage_area_id}&user_id={user_id}"
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as r:
             return json.loads(r.read().decode())
-    except urllib.error.HTTPError as e:
-        try:
-            detail = e.read().decode()
-        except Exception:
-            detail = "(no detail)"
-        return {"accion": "error", "descripcion": f"HTTP {e.code}: {detail}",
-                "producto_nombre": "?", "producto_emoji": "❓", "confianza": 0.0}
+    except Exception:
+        return []
+
+
+def build_name_to_id_map(items: list[dict]) -> dict:
+    """Returns {nombre: id}. Duplicates are resolved by using any (last-write-wins)."""
+    return {p["nombre"]: p["id"] for p in items if p.get("nombre") and p.get("id")}
+
+
+def build_product_list(items: list[dict]) -> str:
+    if not items:
+        return "(No hay productos registrados en este espacio todavía.)"
+    lines = []
+    for p in items:
+        pid   = p.get("id", "")
+        emoji = p.get("emoji") or "📦"
+        name  = p.get("nombre") or "?"
+        brand = p.get("marca") or ""
+        line  = f"  - id={pid} | {emoji} {name}"
+        if brand:
+            line += f" ({brand})"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def analyze_with_gpt4v(frame_before: np.ndarray, frame_after: np.ndarray, user_id: str,
+                        storage_area_id: str = "") -> dict:
+    """Manda dos frames a GPT-4o (con lista de inventario) y devuelve qué producto entró/salió."""
+    b64_before = frame_to_b64(frame_before)
+    b64_after  = frame_to_b64(frame_after)
+
+    known = fetch_inventory(user_id, storage_area_id) if storage_area_id else []
+    name_to_id = build_name_to_id_map(known)
+
+    if known:
+        product_list_str = build_product_list(known)
+        product_section = f"""
+LISTA DE PRODUCTOS REGISTRADOS EN ESTE ESPACIO:
+{product_list_str}
+
+REGLA DE MATCH (muy importante):
+- Comparar visualmente lo que ves con cada producto de la lista.
+- Solo asignar "inventory_item_id" si tu confianza de que es ESE producto exacto es >= 90%.
+- Si la confianza es menor a 90% o el producto no está en la lista, devolver null en "inventory_item_id".
+- "confianza" debe reflejar qué tan seguro estás del match con la lista (0.0 a 1.0).
+"""
+    else:
+        product_section = "\n(No hay productos registrados en este espacio todavía.)\n"
+
+    prompt = f"""Sos un sistema de detección de inventario doméstico.
+Compará estas dos imágenes tomadas con una cámara fija.
+
+Imagen 1: ANTES del movimiento
+Imagen 2: DESPUÉS del movimiento
+{product_section}
+Detectá si algún producto u objeto:
+- Fue RETIRADO (está en imagen 1 pero NO en imagen 2) → accion = "salida"
+- Fue AGREGADO  (NO está en imagen 1 pero SÍ en imagen 2) → accion = "entrada"
+- No cambió nada relevante → accion = "ninguno"
+
+Respondé SOLO con JSON válido, sin markdown ni texto extra:
+{{
+  "accion": "salida" | "entrada" | "ninguno",
+  "inventory_item_id": "<id exacto de la lista si confianza >= 0.90, sino null>",
+  "producto_nombre": "nombre exacto del producto de la lista si matchea, sino tu descripción",
+  "producto_emoji": "emoji representativo",
+  "cantidad": 1,
+  "confianza": 0.0,
+  "descripcion": "descripción breve de lo que cambió"
+}}"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:image/jpeg;base64,{b64_before}", "detail": "low"}},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:image/jpeg;base64,{b64_after}",  "detail": "low"}},
+                ],
+            }],
+            max_tokens=350,
+        )
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = "\n".join(raw.split("\n")[1:])
+            if raw.endswith("```"):
+                raw = raw[:-3]
+        result = json.loads(raw)
+        if result.get("confianza", 0) < 0.90:
+            result["inventory_item_id"] = None
+        if not result.get("inventory_item_id"):
+            nombre = result.get("producto_nombre", "")
+            result["inventory_item_id"] = name_to_id.get(nombre)
+        return result
     except Exception as e:
         return {"accion": "error", "descripcion": str(e),
                 "producto_nombre": "?", "producto_emoji": "❓", "confianza": 0.0}
@@ -240,13 +319,10 @@ def main():
     print("   Mové un producto para disparar el análisis automático.")
     print("   Q=salir | R=resetear fondo | S=captura manual antes/después")
 
-    def run_analysis(before, after, area_id=""):
+    def run_analysis(before, after, user_id="", area_id=""):
         state["status"] = "analyzing"
-        before_b64 = frame_to_b64(before)
-        after_b64  = frame_to_b64(after)
-
-        print(f"\n🤖  [{datetime.now().strftime('%H:%M:%S')}] Enviando al backend para análisis...")
-        result = send_to_backend(before_b64, after_b64, area_id, MONITOR_USER_ID)
+        print(f"\n🤖  [{datetime.now().strftime('%H:%M:%S')}] Analizando con GPT-4o...")
+        result = analyze_with_gpt4v(before, after, user_id, area_id)
 
         state["last_result"] = result
         state["status"] = "result" if result.get("accion") != "error" else "error"
@@ -274,6 +350,35 @@ def main():
                 print(f"   📱 Notificación enviada al celular via Supabase Realtime")
             else:
                 print(f"   ⚠️  Confianza baja ({conf}%) — no se notifica al celular")
+
+            # ── Notify backend: update inventory + history_logs + Realtime ──
+            try:
+                import urllib.error
+                payload = json.dumps({
+                    "accion":             accion,
+                    "inventory_item_id":  item_id,
+                    "producto_nombre":    nombre,
+                    "producto_emoji":     emoji,
+                    "cantidad":           result.get("cantidad", 1),
+                    "confianza":          result.get("confianza", 0),
+                    "descripcion":        desc,
+                    "storage_area_id":    STORAGE_AREA_ID,
+                    "user_id":            MONITOR_USER_ID,
+                }).encode("utf-8")
+                req_obj = urllib.request.Request(
+                    f"{BACKEND_URL}/api/v1/monitor/event",
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req_obj, timeout=10) as r:
+                    resp = json.loads(r.read().decode())
+                    qty_left = resp.get("cantidad_restante")
+                    if qty_left is not None:
+                        print(f"   📊 Stock actualizado → {qty_left} unidades restantes")
+                    print(f"   ✅ Registrado en backend")
+            except Exception as api_err:
+                print(f"   ⚠️  No se pudo notificar al backend: {api_err}")
 
     while True:
         ret, frame = cap.read()
@@ -310,7 +415,7 @@ def main():
                     sm["analyzing"]  = True
                     before = sm["frame_before"]
                     after  = frame.copy()
-                    t = threading.Thread(target=run_analysis, args=(before, after, STORAGE_AREA_ID), daemon=True)
+                    t = threading.Thread(target=run_analysis, args=(before, after, MONITOR_USER_ID, STORAGE_AREA_ID), daemon=True)
                     t.start()
             elif not sm["in_motion"] and not sm["analyzing"]:
                 state["status"] = "waiting"
@@ -346,7 +451,7 @@ def main():
                     before = sm["manual_before"]
                     after  = frame.copy()
                     sm["manual_before"] = None
-                    t = threading.Thread(target=run_analysis, args=(before, after, STORAGE_AREA_ID), daemon=True)
+                    t = threading.Thread(target=run_analysis, args=(before, after, MONITOR_USER_ID, STORAGE_AREA_ID), daemon=True)
                     t.start()
 
     cap.release()
