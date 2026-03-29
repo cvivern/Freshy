@@ -776,10 +776,6 @@ export default function StockScreen() {
         <Text style={styles.emptyText}>Recetas próximamente.</Text>
       </ScrollView>
     ) : (
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        <Text style={styles.emptyText}>Recetas próximamente.</Text>
-      </ScrollView>
-    ) : (
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
