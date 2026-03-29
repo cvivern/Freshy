@@ -567,12 +567,7 @@ export default function ProfileScreen() {
                   <Ionicons name="videocam-outline" size={20} color={cam.is_active ? '#5B9BD5' : '#BBB'} />
                 </View>
                 <View style={styles.cameraInfo}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.cameraName}>{cam.name}</Text>
-                    {cam.is_active && (
-                      <View style={styles.activeBadge}><Text style={styles.activeBadgeText}>activa</Text></View>
-                    )}
-                  </View>
+                  <Text style={styles.cameraName}>{cam.name}</Text>
                   <View style={styles.cameraBadges}>
                     {cam.storage_areas?.households?.name && (
                       <View style={styles.cameraBadge}>
