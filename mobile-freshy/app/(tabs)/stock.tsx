@@ -26,6 +26,8 @@ import {
   updateInventoryItem,
 } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useShoppingList } from '@/contexts/ShoppingListContext';
+import type { ShoppingListItem } from '@/contexts/ShoppingListContext';
 import type { InventoryItemResponse } from '@/services/api';
 import ProductActionsMenu from '@/components/ProductActionsMenu';
 
@@ -43,28 +45,6 @@ type StockItem = {
   shelfLife: number;
   estado: 'fresco' | 'por_vencer' | 'vencido';
 };
-
-type ShoppingListItem = {
-  id: string;
-  emoji: string;
-  name: string;
-  brand: string;
-  quantity: number;
-};
-
-// ------- Mock addToShoppingList -------
-type AddToShoppingListParams = {
-  householdId: string;
-  inventoryItemId: string;
-  name: string;
-  brand: string;
-  emoji: string;
-  accessToken?: string;
-};
-
-async function addToShoppingList(_params: AddToShoppingListParams): Promise<void> {
-  // Local shopping list — no backend call needed
-}
 
 // ------- Helpers -------
 function calcDaysLeft(fechaVencimiento: string): number {
@@ -499,6 +479,7 @@ const STOCK_TABS: { key: StockTab; label: string }[] = [
 
 export default function StockScreen() {
   const { user } = useAuth();
+  const { shoppingList, addToList, removeFromList, changeQuantity } = useShoppingList();
   const [activeTab, setActiveTab] = useState<StockTab>('stock');
   const [activeFilter, setActiveFilter] = useState<'todos' | 'buen_estado' | 'por_vencer' | 'vencidos'>('todos');
   const [items, setItems] = useState<StockItem[]>([]);
@@ -510,7 +491,6 @@ export default function StockScreen() {
   const [storageAreaId, setStorageAreaId] = useState('');
 
   const [cartStates, setCartStates] = useState<Record<string, CartButtonState>>({});
-  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   // Three-dot menu state
@@ -619,44 +599,21 @@ export default function StockScreen() {
       return;
     }
     setCartStates((prev) => ({ ...prev, [item.id]: 'loading' }));
-    try {
-      await addToShoppingList({
-        householdId: selectedHouseholdId,
-        inventoryItemId: item.id,
-        name: item.name,
-        brand: item.brand,
-        emoji: item.emoji,
-        accessToken: user?.access_token ?? undefined,
-      });
-      setShoppingList((prev) => [
-        ...prev,
-        { id: item.id, emoji: item.emoji, name: item.name, brand: item.brand, quantity: 1 },
-      ]);
-      setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
-    } catch {
-      setCartStates((prev) => ({ ...prev, [item.id]: 'error' }));
-      setTimeout(() => {
-        setCartStates((prev) => ({ ...prev, [item.id]: 'idle' }));
-      }, 2000);
-    }
-  }, [selectedHouseholdId, user?.access_token, shoppingList]);
+    addToList({ id: item.id, emoji: item.emoji, name: item.name, brand: item.brand });
+    setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
+  }, [shoppingList, addToList]);
 
   const handleRemoveFromList = useCallback((id: string) => {
-    setShoppingList((prev) => prev.filter((i) => i.id !== id));
+    removeFromList(id);
     setCartStates((prev) => ({ ...prev, [id]: 'idle' }));
-  }, []);
+  }, [removeFromList]);
 
   const handleChangeQuantity = useCallback((id: string, delta: number) => {
-    setShoppingList((prev) => {
-      const next = prev
-        .map((i) => i.id === id ? { ...i, quantity: i.quantity + delta } : i)
-        .filter((i) => i.quantity > 0);
-      if (!next.find((i) => i.id === id)) {
-        setCartStates((cs) => ({ ...cs, [id]: 'idle' }));
-      }
-      return next;
-    });
-  }, []);
+    changeQuantity(id, delta);
+    if ((shoppingList.find(i => i.id === id)?.quantity ?? 0) + delta <= 0) {
+      setCartStates((cs) => ({ ...cs, [id]: 'idle' }));
+    }
+  }, [changeQuantity, shoppingList]);
 
   const handleItemDeleted = useCallback((id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
@@ -676,17 +633,14 @@ export default function StockScreen() {
 
   const handleAddManual = useCallback((item: Omit<ShoppingListItem, 'id'>) => {
     const id = `manual_${Date.now()}`;
-    setShoppingList((prev) => [...prev, { ...item, id }]);
-  }, []);
+    addToList({ id, ...item });
+  }, [addToList]);
 
   const handleAddSuggestion = useCallback((item: StockItem) => {
     if (shoppingList.some((s) => s.id === item.id)) return;
-    setShoppingList((prev) => [
-      ...prev,
-      { id: item.id, emoji: item.emoji, name: item.name, brand: item.brand, quantity: 1 },
-    ]);
+    addToList({ id: item.id, emoji: item.emoji, name: item.name, brand: item.brand });
     setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
-  }, [shoppingList]);
+  }, [shoppingList, addToList]);
 
   useEffect(() => {
     fetchHouseholds(user?.user_id ?? '', user?.access_token).then((hhs) => {

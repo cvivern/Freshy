@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { MonitorProvider } from '@/contexts/MonitorContext';
+import { ShoppingListProvider } from '@/contexts/ShoppingListContext';
 import MonitorToast from '@/components/MonitorToast';
 
 export {
@@ -43,10 +44,12 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <MonitorProvider>
-        <RootLayoutNav />
-        <MonitorToast />
-      </MonitorProvider>
+      <ShoppingListProvider>
+        <MonitorProvider>
+          <RootLayoutNav />
+          <MonitorToast />
+        </MonitorProvider>
+      </ShoppingListProvider>
     </AuthProvider>
   );
 }

@@ -22,6 +22,7 @@ import {
   DEFAULT_USER_ID,
 } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useShoppingList } from '@/contexts/ShoppingListContext';
 import type { InventoryItem } from '@/services/api';
 import { scheduleExpiryNotifications } from '@/services/notifications';
 import { useSpaceMonitor } from '@/hooks/useSpaceMonitor';
@@ -177,6 +178,7 @@ function Dropdown({ options, selected, onSelect }: DropdownProps) {
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const { user } = useAuth();
+  const { shoppingList, addToList } = useShoppingList();
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterState>('todos');
   const [activeSort, setActiveSort] = useState<SortOption>('vence_primero');
@@ -286,12 +288,14 @@ export default function HomeScreen() {
   }, []);
 
   const handleAddToCart = useCallback((item: InventoryItem) => {
-    if (cartStates[item.id] === 'added') return;
-    setCartStates((prev) => ({ ...prev, [item.id]: 'loading' }));
-    setTimeout(() => {
+    if (shoppingList.some((s) => s.id === item.id)) {
       setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
-    }, 600);
-  }, [cartStates]);
+      return;
+    }
+    setCartStates((prev) => ({ ...prev, [item.id]: 'loading' }));
+    addToList({ id: item.id, emoji: item.emoji ?? '📦', name: item.nombre, brand: item.marca ?? '' });
+    setCartStates((prev) => ({ ...prev, [item.id]: 'added' }));
+  }, [shoppingList, addToList]);
 
   return (
     <View style={styles.container}>
