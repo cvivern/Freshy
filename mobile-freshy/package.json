@@ -7,7 +7,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "preMonitor": "npx kill-port 8081 --silent",
+    "premonitor": "powershell -Command \"$p=(Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue).OwningProcess; if($p){Stop-Process -Id $p -Force -ErrorAction SilentlyContinue}; Write-Host 'Puerto 8081 liberado'\"",
     "monitor": "concurrently --names \"EXPO,MONITOR\" --prefix-colors \"cyan,green\" \"expo start\" \"pip install opencv-python openai numpy -q && set PYTHONIOENCODING=utf-8 && python ../tools/space_monitor_test.py\""
   },
   "dependencies": {
