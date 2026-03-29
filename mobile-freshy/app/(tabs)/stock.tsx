@@ -514,9 +514,16 @@ function ListaDeComprasScreen({
 }
 
 // ------- Main Screen -------
+type StockTab = 'stock' | 'lista_compras';
+
+const STOCK_TABS: { key: StockTab; label: string }[] = [
+  { key: 'stock', label: 'Stock' },
+  { key: 'lista_compras', label: 'Lista de compras' },
+];
+
 export default function StockScreen() {
   const { user } = useAuth();
-  const [mode, setMode] = useState<ScreenMode>('stock');
+  const [activeTab, setActiveTab] = useState<StockTab>('stock');
   const [activeFilter, setActiveFilter] = useState<'todos' | 'buen_estado' | 'por_vencer' | 'vencidos'>('todos');
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -659,6 +666,36 @@ export default function StockScreen() {
         onSelect={setSelectedHouseholdId}
       />
 
+      {/* ---- 2-tab bar: Stock / Lista de compras ---- */}
+      <View style={styles.tabBar}>
+        {STOCK_TABS.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tabItem, activeTab === tab.key && styles.tabItemActive]}
+            onPress={() => setActiveTab(tab.key)}
+          >
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {activeTab === 'lista_compras' ? (
+          <Text style={styles.emptyText}>Lista de compras próximamente.</Text>
+        ) : (
+        <>
+        <Text style={styles.sectionTitle}>Resumen del hogar</Text>
+
+        <View style={styles.statsGrid}>
+          <StatCard value={stats.total} label="Total de productos" iconName="cart-outline" iconColor="#5B9BD5" borderColor="#A8D0F0" bgColor="#E8F4FF" />
+          <StatCard value={stats.bienEstado} label="En buen estado" iconName="checkmark-circle-outline" iconColor="#27AE60" borderColor="#80CC90" bgColor="#DFF5E3" />
+          <StatCard value={stats.porVencer} label="Por vencer (≤30 días)" iconName="alarm-outline" iconColor="#E07820" borderColor="#F0C060" bgColor="#FFF3CD" />
+          <StatCard value={stats.vencidos} label="Vencidos" iconName="close-circle-outline" iconColor="#C0392B" borderColor="#E07070" bgColor="#FDDEDE" />
+        </View>
+
+        <Text style={styles.sectionTitle}>Todos los productos</Text>
       <ModeSwitcher mode={mode} onChange={setMode} />
 
       {mode === 'lista' ? (
@@ -761,6 +798,33 @@ const styles = StyleSheet.create({
   statusBadge: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   statusText: { fontSize: 13, fontWeight: '700' },
 
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 11,
+    borderRadius: 999,
+    backgroundColor: '#F0F0F0',
+  },
+  tabItemActive: {
+    backgroundColor: '#A8CFEE',
+  },
+  tabLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+  },
+  tabLabelActive: {
+    color: '#fff',
+  },
   cartButton: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 
   listaCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#E0ECF8', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 10, gap: 12 },
