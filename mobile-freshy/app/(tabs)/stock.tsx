@@ -698,25 +698,62 @@ export default function StockScreen() {
         </View>
 
         <Text style={styles.sectionTitle}>Todos los productos</Text>
+      <ModeSwitcher mode={mode} onChange={setMode} />
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filtersScroll}
-          contentContainerStyle={styles.filtersContent}
-        >
-          {FILTERS.map((f) => (
-            <TouchableOpacity
-              key={f.key}
-              style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
-              onPress={() => setActiveFilter(f.key)}
-            >
-              <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      {mode === 'lista' ? (
+        <ListaDeComprasScreen
+          items={shoppingList}
+          stockItems={items}
+          onRemove={handleRemoveFromList}
+          onChangeQuantity={handleChangeQuantity}
+          onAddManual={handleAddManual}
+          onAddSuggestion={handleAddSuggestion}
+        />
+      ) : (
+        <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll} contentContainerStyle={styles.filtersContent}>
+            {FILTERS.map((f) => (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.filterChip, activeFilter === f.key && styles.filterChipActive]}
+                onPress={() => setActiveFilter(f.key)}
+              >
+                <Text style={[styles.filterChipText, activeFilter === f.key && styles.filterChipTextActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {loading ? (
+            <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={() => storageAreaId && loadInventory(storageAreaId)}>
+                <Text style={styles.retryText}>Reintentar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filtered.length === 0 ? (
+            <Text style={styles.emptyText}>No hay productos en esta categoría.</Text>
+          ) : (
+            filtered.map((item) => (
+              <ProductCard
+                key={item.id}
+                item={item}
+                cartState={cartStates[item.id] ?? 'idle'}
+                onAddToCart={() => handleAddToCart(item)}
+              />
+            ))
+          )}
+        </>
+      )}
+      </>
+      )}
+      </ScrollView>
+    </View>
+  );
+}
 
         {loading ? (
           <ActivityIndicator size="large" color="#A8CFEE" style={styles.loader} />
