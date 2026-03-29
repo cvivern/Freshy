@@ -52,9 +52,12 @@ async def identify_image(file: UploadFile = File(...)):
             detail=f"OpenAI analysis failed: {exc}",
         )
 
-    # Map to {detections: [{label, confidence}]} format expected by the mobile app
+    # Map to {detections: [{label, confidence, freshness, shelf_life_days}]} format expected by the mobile app
     if result.get("type") in ("fruit", "vegetable"):
-        return {"detections": [{"label": result.get("name", "desconocido"), "confidence": 1.0}]}
+        _FRESHNESS_DAYS = {"fresco": 5, "medio": 3, "malo": 1}
+        freshness = result.get("freshness", "fresco")
+        shelf_life_days = _FRESHNESS_DAYS.get(freshness, 3)
+        return {"detections": [{"label": result.get("name", "desconocido"), "confidence": 1.0, "freshness": freshness, "shelf_life_days": shelf_life_days}]}
 
     return {"detections": []}
 

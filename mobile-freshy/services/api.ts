@@ -14,7 +14,7 @@ function authHeaders(token?: string | null): Record<string, string> {
 }
 
 // ------- Types -------
-export type Detection = { label: string; confidence: number };
+export type Detection = { label: string; confidence: number; freshness?: string; shelf_life_days?: number };
 
 export type ProductInfo = { category: string; brand: string; name: string };
 
