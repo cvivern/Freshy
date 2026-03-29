@@ -708,18 +708,7 @@ export default function StockScreen() {
           onAddSuggestion={handleAddSuggestion}
         />
       ) : (
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-          <Text style={styles.sectionTitle}>Resumen del hogar</Text>
-
-          <View style={styles.statsGrid}>
-            <StatCard value={stats.total}      label="Total de productos"    iconName="cart-outline"             iconColor="#5B9BD5" borderColor="#A8D0F0" bgColor="#E8F4FF" />
-            <StatCard value={stats.bienEstado} label="En buen estado"        iconName="checkmark-circle-outline" iconColor="#27AE60" borderColor="#80CC90" bgColor="#DFF5E3" />
-            <StatCard value={stats.porVencer}  label="Por vencer (≤30 días)" iconName="alarm-outline"            iconColor="#E07820" borderColor="#F0C060" bgColor="#FFF3CD" />
-            <StatCard value={stats.vencidos}   label="Vencidos"              iconName="close-circle-outline"     iconColor="#C0392B" borderColor="#E07070" bgColor="#FDDEDE" />
-          </View>
-
-          <Text style={styles.sectionTitle}>Todos los productos</Text>
-
+        <>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll} contentContainerStyle={styles.filtersContent}>
             {FILTERS.map((f) => (
               <TouchableOpacity
@@ -755,8 +744,11 @@ export default function StockScreen() {
               />
             ))
           )}
-        </ScrollView>
+        </>
       )}
+      </>
+      )}
+      </ScrollView>
     </View>
   );
 }
