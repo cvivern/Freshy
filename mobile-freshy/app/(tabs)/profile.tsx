@@ -403,11 +403,31 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (!user) return;
-    fetchCameras(user.user_id).then(setCameras);
+
     fetchHouseholds(user.user_id).then(async (hh) => {
       setHouseholds(hh);
       const areaArrays = await Promise.all(hh.map(h => fetchStorageAreas(h.id)));
-      setStorageAreas(areaArrays.flat());
+      const allAreas = areaArrays.flat();
+      setStorageAreas(allAreas);
+
+      // Cargar cámaras y auto-crear una si no tiene ninguna
+      const existingCams = await fetchCameras(user.user_id);
+      if (existingCams.length === 0 && allAreas.length > 0) {
+        try {
+          const defaultCam = await createCamera({
+            name: 'Cámara del dispositivo',
+            storage_area_id: allAreas[0].id,
+            user_id: user.user_id,
+            device_identifier: 'device',
+            is_active: true,
+          });
+          setCameras([defaultCam]);
+        } catch {
+          setCameras([]);
+        }
+      } else {
+        setCameras(existingCams);
+      }
     });
   }, [user]);
 
@@ -551,9 +571,18 @@ export default function ProfileScreen() {
                       <View style={styles.activeBadge}><Text style={styles.activeBadgeText}>activa</Text></View>
                     )}
                   </View>
-                  <Text style={styles.cameraArea}>
-                    🏠 {cam.storage_areas?.households?.name ?? '—'} · 📦 {cam.storage_areas?.name ?? '—'}
-                  </Text>
+                  <View style={styles.cameraBadges}>
+                    {cam.storage_areas?.households?.name && (
+                      <View style={styles.cameraBadge}>
+                        <Text style={styles.cameraBadgeText}>{cam.storage_areas.households.name}</Text>
+                      </View>
+                    )}
+                    {cam.storage_areas?.name && (
+                      <View style={styles.cameraBadge}>
+                        <Text style={styles.cameraBadgeText}>{cam.storage_areas.name}</Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity onPress={() => { setEditingCamera(cam); setEditCamVisible(true); }}>
@@ -792,7 +821,9 @@ const styles = StyleSheet.create({
   cameraIconWrap: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   cameraInfo: { flex: 1 },
   cameraName: { fontSize: 15, fontWeight: '600', color: '#1A1A1A' },
-  cameraArea: { fontSize: 12, color: '#999', marginTop: 2 },
+  cameraBadges: { flexDirection: 'row', gap: 6, marginTop: 5, flexWrap: 'wrap' },
+  cameraBadge: { backgroundColor: '#D6EEF8', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  cameraBadgeText: { fontSize: 11, fontWeight: '600', color: '#3A7FBF' },
   activeBadge: { backgroundColor: '#E8F4FF', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
   activeBadgeText: { fontSize: 11, fontWeight: '700', color: '#5B9BD5' },
   areaList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
