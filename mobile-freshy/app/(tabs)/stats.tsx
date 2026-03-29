@@ -208,7 +208,7 @@ function CategoriasRiesgo({ items }: { items: StatsData['categorias_riesgo'] }) 
             <View style={styles.riesgoTrack}>
               <View style={[styles.riesgoFill, { width: `${pct}%` as any, backgroundColor: color }]} />
             </View>
-            <Text style={styles.riesgoSub}>{item.en_riesgo} de {item.total} en riesgo</Text>
+            <Text style={styles.riesgoSub}>{item.en_riesgo} de {item.total} vence en ≤3 días</Text>
           </View>
         );
       })}
@@ -331,7 +331,12 @@ export default function StatsScreen() {
       const cat = item.categoria ?? 'Sin categoría';
       if (!catRiesgo[cat]) catRiesgo[cat] = { en_riesgo: 0, total: 0 };
       catRiesgo[cat].total++;
-      if (calcEstado(item.fecha_vencimiento) !== 'fresco') catRiesgo[cat].en_riesgo++;
+      if (item.fecha_vencimiento) {
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const exp = new Date(item.fecha_vencimiento); exp.setHours(0, 0, 0, 0);
+        const daysLeft = Math.floor((exp.getTime() - today.getTime()) / 86_400_000);
+        if (daysLeft >= 0 && daysLeft <= 3) catRiesgo[cat].en_riesgo++;
+      }
     }
     const categorias_riesgo = Object.entries(catRiesgo)
       .filter(([, v]) => v.en_riesgo > 0)

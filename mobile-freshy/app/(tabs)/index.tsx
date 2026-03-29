@@ -169,8 +169,7 @@ export default function HomeScreen() {
   const [selectedHouseholdId, setSelectedHouseholdId] = useState('');
   const [selectedStorageAreaId, setSelectedStorageAreaId] = useState('');
 
-  const { MonitorCamera } = useSpaceMonitor({
-    storageAreaId: selectedStorageAreaId ?? DEFAULT_STORAGE_AREA_ID,
+  useSpaceMonitor({
     userId: user?.user_id ?? DEFAULT_USER_ID,
     enabled: true,
   });
@@ -244,7 +243,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <MonitorCamera />
       <AppHeaderConEleccionHogar
         hogares={hogares}
         selectedId={selectedHouseholdId}

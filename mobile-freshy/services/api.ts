@@ -14,7 +14,7 @@ function authHeaders(token?: string | null): Record<string, string> {
 }
 
 // ------- Types -------
-export type Detection = { label: string; confidence: number };
+export type Detection = { label: string; confidence: number; freshness?: string; shelf_life_days?: number; emoji?: string };
 
 export type ProductInfo = { category: string; brand: string; name: string };
 
@@ -161,7 +161,17 @@ export async function scanPackagedProduct(uri: string): Promise<PackagedScanResu
   formData.append('file', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
   const response = await fetchWithTimeout(`${API_BASE}/api/v1/detection/scan`, { method: 'POST', body: formData });
   if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
-  return response.json();
+  const data = await response.json();
+  // Only extract packaged-product fields when the model identified a barcode product.
+  // Any other type (fruit, unknown) yields all nulls so prior scan data is preserved.
+  if (data.type !== 'barcode_product') {
+    return { name: null, brand: null, expiry_date: null };
+  }
+  return {
+    name: data.name ?? null,
+    brand: data.brand ?? null,
+    expiry_date: data.expiry_date ?? null,
+  };
 }
 
 
@@ -177,7 +187,7 @@ export async function identifyFruits(uri: string): Promise<Detection[]> {
 export async function detectFrutaVerdura(uri: string): Promise<ProductInfo> {
   const formData = new FormData();
   formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
-  const response = await fetchWithTimeout(`${API_BASE}/detection/fruits`, { method: 'POST', body: formData });
+  const response = await fetchWithTimeout(`${API_BASE}/api/v1/detection/fruits`, { method: 'POST', body: formData });
   if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
   const data = await response.json();
   return parseFruitDetections((data.detections ?? []) as Detection[]);
@@ -186,7 +196,7 @@ export async function detectFrutaVerdura(uri: string): Promise<ProductInfo> {
 export async function detectOtroProducto(uri: string): Promise<ProductInfo> {
   const formData = new FormData();
   formData.append('image', { uri, name: 'photo.jpg', type: 'image/jpeg' } as any);
-  const response = await fetchWithTimeout(`${API_BASE}/detection/scan/product`, { method: 'POST', body: formData });
+  const response = await fetchWithTimeout(`${API_BASE}/api/v1/detection/scan/product`, { method: 'POST', body: formData });
   if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
   const data = await response.json();
   return {

@@ -1,3 +1,8 @@
+import sys
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 """
 Freshy - Space Monitor Tester
 ==============================
@@ -34,7 +39,11 @@ OPENAI_API_KEY = "sk-proj-wWBKo7DYNM2_EJlkh_hCeWyCaMBKOrVE9u1iIqVabFcpB2oni9ngIo
 BACKEND_URL = "https://backend-freshy.vercel.app"
 
 # Usuario activo (el mismo que está logueado en la app)
-MONITOR_USER_ID = "00000000-0000-0000-0000-000000000101"  # cambiar por el user_id real
+# Para ver tu user_id: abrí la app → Perfil → el ID aparece debajo del nombre
+# Usuarios conocidos:
+#   slezamaorihuela@itba.edu.ar  →  a4362c90-a015-4030-917a-8771200c0d56
+#   a (email: a)                 →  209f8d5c-ab16-472c-8d9f-61970d51a317
+MONITOR_USER_ID = "a4362c90-a015-4030-917a-8771200c0d56"
 
 # Se auto-completa al inicio consultando la cámara activa del usuario
 STORAGE_AREA_ID = ""

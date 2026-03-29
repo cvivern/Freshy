@@ -1,5 +1,3 @@
-import random
-
 from fastapi import APIRouter, HTTPException, UploadFile, File, status
 
 from app.services.openai_detection_service import OpenAIDetectionService
@@ -52,9 +50,12 @@ async def identify_image(file: UploadFile = File(...)):
             detail=f"OpenAI analysis failed: {exc}",
         )
 
-    # Map to {detections: [{label, confidence}]} format expected by the mobile app
+    # Map to {detections: [{label, confidence, freshness, shelf_life_days, emoji}]} format expected by the mobile app
     if result.get("type") in ("fruit", "vegetable"):
-        return {"detections": [{"label": result.get("name", "desconocido"), "confidence": 1.0}]}
+        _FRESHNESS_DAYS = {"fresco": 5, "medio": 3, "malo": 1}
+        freshness = result.get("freshness", "fresco")
+        shelf_life_days = _FRESHNESS_DAYS.get(freshness, 3)
+        return {"detections": [{"label": result.get("name", "desconocido"), "confidence": 1.0, "freshness": freshness, "shelf_life_days": shelf_life_days, "emoji": result.get("emoji")}]}
 
     return {"detections": []}
 
@@ -142,7 +143,11 @@ async def scan_packaged_product(file: UploadFile = File(...)):
             detail="Image exceeds 10 MB limit.",
         )
 
-    # TODO: replace mock with real vision AI call
-    result = {"name": "Leche Entera", "brand": "La Serenísima", "expiry_date": "2026-01-01"}
-    result[random.choice(["name", "brand", "expiry_date"])] = None
-    return result
+    service = OpenAIDetectionService()
+    try:
+        return service.analyze(image_bytes)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"OpenAI analysis failed: {exc}",
+        )

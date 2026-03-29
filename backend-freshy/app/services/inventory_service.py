@@ -33,6 +33,8 @@ class InventoryService:
                 "emoji": data.emoji,
                 "est_shelf_life_days": 7,
             })
+        elif data.emoji and not catalog_item.get("emoji"):
+            catalog_item = self._catalog_repo.update(catalog_item["id"], {"emoji": data.emoji}) or catalog_item
 
         row = self._repo.create({
             "storage_area_id": str(data.storage_area_id),
