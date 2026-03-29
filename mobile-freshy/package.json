@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "monitor": "concurrently --names \"EXPO,MONITOR\" --prefix-colors \"cyan,green\" \"expo start\" \"pip install opencv-python openai numpy -q && python ../tools/space_monitor_test.py\""
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "concurrently": "^9.2.1",
     "react-test-renderer": "19.1.0",
     "typescript": "~5.9.2"
   },
